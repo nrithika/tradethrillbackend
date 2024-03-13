@@ -36,6 +36,7 @@ def send_otp_email(receiver_email, otp):
 
 async def handle_register(data:model.User_For_Registration):
     # print(data)
+    conn,cursor=database.make_db()
     cursor.execute("SELECT COUNT(*) FROM reports WHERE reported_id = %s", (data.user_id,))
     num_reports = cursor.fetchone()[0]
     if num_reports >= 7:
@@ -50,7 +51,7 @@ async def handle_register(data:model.User_For_Registration):
     except Exception as e:
         #error in sending otp
         raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
-    conn,cursor=database.make_db()
+    
     try:
         check_query = f"SELECT * FROM users WHERE user_id = '{data.user_id}'"
         cursor.execute(check_query)
@@ -119,6 +120,8 @@ def otp_email_forgotpass(receiver_email, otp):
         raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
 
 async def forgot_password(data:model.ForgotPassword):
+    conn, cursor = database.make_db()
+
     cursor.execute("SELECT COUNT(*) FROM reports WHERE reported_id = %s", (data.user_id,))
     num_reports = cursor.fetchone()[0]
     if num_reports >= 7:
@@ -127,7 +130,6 @@ async def forgot_password(data:model.ForgotPassword):
     if data.new_password != data.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
     
-    conn, cursor = database.make_db()
     try:
         verify_user_query = f"SELECT verified FROM users WHERE user_id = '{data.user_id}'"
         cursor.execute(verify_user_query)
@@ -180,10 +182,10 @@ async def new_otp(data:model.OTP):
         
         else:
             raise HTTPException(status_code=400, detail="Invalid OTP")
-    except Exception as e:
-        #error in verifying otp
-        conn.rollback()  # Rollback any pending changes
-        raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
+    # except Exception as e:
+    #     #error in verifying otp
+    #     conn.rollback()  # Rollback any pending changes
+    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     finally:
         conn.close()  # Ensure connection is closed
 
@@ -193,7 +195,7 @@ async def new_otp(data:model.OTP):
     
 async def get_user_info(user_id: int):
     # function for getting the data of the user and it has been made as a sub function so as to assist the login function
-    query = """
+    query = f"""
 select user_id, email, name, photo, verified from users where user_id = '{user_id}'
 """
     conn, cursor = database.make_db()
@@ -277,10 +279,10 @@ async def login(data:model.User):
         if verified and hashed_password == data.hashed_password:
             conn.close()
             # add code for sending the user data, notifications
-            data = {}
+            empty_data = {}
             user_info = await get_user_info(data.user_id)
             user_notifications = await get_notifications(data.user_id)
-            data = { **data, **user_info, "notifications": user_notifications }
+            data = { **empty_data, **user_info, "notifications": user_notifications }
             return data
         else:
             conn.close()
