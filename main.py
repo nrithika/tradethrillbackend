@@ -1,10 +1,21 @@
 from fastapi import FastAPI
 from stuff import model
 from stuff import handle
-from fastapi import FastAPI, UploadFile, File
+# from fastapi import FastAPI, Depends, UploadFile, Header
+from fastapi.middleware.cors import CORSMiddleware
+# from tasks import tasks, models
 
 app = FastAPI()
 
+origins = ["http://localhost:3000", "http://localhost:3000/"]       #write the server of frontend in your laptop
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def read_root():
@@ -128,3 +139,24 @@ async def get_specific_product(product_id: int):
 # view profile 
 # view all products
 # view specific product
+
+
+
+
+
+
+
+
+
+# just checking
+
+
+@app.post("/fun")
+async def fun(data:model.Fun):
+    a = await handle.fun(data)
+    return a
+
+# @app.get("/searching")
+# async def searching(query: str):
+#     a = await handle.searching(query)
+#     return a

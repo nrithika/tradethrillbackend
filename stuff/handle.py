@@ -313,7 +313,7 @@ async def login(data:model.User):
 #         await conn.close()
 
 
-async def products(data:model.Product, files: List[UploadFile] = File(...)):
+async def products(data:model.Product, files: List[UploadFile] = File(...)):            #check the files code
     conn, cursor = database.make_db()
     cursor.execute("SELECT MAX(product_id) FROM products")
     result = cursor.fetchone()
@@ -610,3 +610,36 @@ async def get_specific_product(product_id: int):
 
 
 # remove product
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# just checking
+async def fun(data:model.Product):
+    conn, cursor = database.make_db()
+    cursor.execute("SELECT MAX(product_id) FROM fun")
+    result = cursor.fetchone()
+    if result and result[0]:
+        product_id = int(result[0]) + 1
+    else:
+        product_id = 100000
+    
+
+    concat = data.title.replace(" ", "").lower() + data.description.replace(" ", "").lower()
+
+    query = f"""insert into fun values ('{product_id}', '{concat}')"""
+    cursor.execute(query)
+
+    conn.commit()
+    conn.close()
+    return data

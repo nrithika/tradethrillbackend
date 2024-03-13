@@ -68,3 +68,18 @@ class Report(BaseModel):
 class Notifications(BaseModel):
     seller_id: int
     buyer_id: int
+
+
+
+
+
+
+
+
+
+
+# just checking
+class Fun(BaseModel):
+    # product_id: int
+    title: str
+    description: str
