@@ -1,4 +1,6 @@
 from pydantic import BaseModel
+from fastapi import UploadFile
+from typing import Optional,Union
 
 class User(BaseModel):
     user_id:int
@@ -20,6 +22,7 @@ class ForgotPassword(BaseModel):
 
 class EditProfile(BaseModel):
     user_id:int
+    name: str
     photo:str
 
 class Product(BaseModel):
@@ -30,6 +33,14 @@ class Product(BaseModel):
     usage:int
     description:str
     tags:str
+
+class ProductImage(BaseModel):
+    pid: int
+    Image1: Optional[Union[UploadFile, None]] = None
+    Image2: Optional[Union[UploadFile, None]] = None
+    Image3: Optional[Union[UploadFile, None]] = None
+    Image4: Optional[Union[UploadFile, None]] = None
+    Image5: Optional[Union[UploadFile, None]] = None
 
 class Wishlist(BaseModel):
     product_id:int
@@ -49,3 +60,11 @@ class Search(BaseModel):
 # class ProductImage(BaseModel):
 #     product_id: int
 #     image_url: str
+    
+class Report(BaseModel):
+    reporter_id: int
+    reported_id: int
+
+class Notifications(BaseModel):
+    seller_id: int
+    buyer_id: int
