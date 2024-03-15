@@ -82,9 +82,13 @@ async def verify_otp(data:model.OTP):
             cursor.execute(update_query)
             conn.commit()  
             conn.close()
-            return True
+            return {
+                "message":"success"
+            }
         else:
-            raise HTTPException(status_code=400, detail="Invalid OTP")
+            return{
+                "message":"Wrong OTP"
+            }
     except Exception as e:
         #error in verifying otp
         conn.rollback()  # Rollback any pending changes
@@ -262,7 +266,14 @@ select from_name, type, time from (select u.name as from_name, n.time as time, n
     cursor.execute(query)
     results = cursor.fetchall()
     conn.close()
-    return results
+    data = []
+    for result in results:
+        data = {
+            "from_name":result[0],
+            "type":result[1],
+            "time":result[2]
+        }
+    return data
 
 async def login(data:model.User):
     conn, cursor = database.make_db()
@@ -282,7 +293,8 @@ async def login(data:model.User):
             empty_data = {}
             user_info = await get_user_info(data.user_id)
             user_notifications = await get_notifications(data.user_id)
-            data = { **empty_data, **user_info, "notifications": user_notifications }
+            data = { **empty_data, **user_info, "notifications": user_notifications,  "message":"success"}
+            # print (data)
             return data
         else:
             conn.close()
@@ -567,18 +579,17 @@ async def get_products():
         p.sell_price,
         u.name AS seller_name,
         u.email AS seller_email,
-        i.photo AS product_image
+        i.image AS product_image
     FROM 
         products p
     JOIN 
         users u ON p.seller_id = u.user_id
-    JOIN 
+    LEFT JOIN 
         product_images i ON p.product_id = i.product_id
     """
     cursor.execute(query)
     results = cursor.fetchall()
     conn.close()
-
     if results:
         products = []
         for row in results:
@@ -591,6 +602,7 @@ async def get_products():
                 "product_image": row[5]
             }
             products.append(product)
+        print(products)
         return products
     else:
         return []

@@ -76,7 +76,7 @@ async def get_notifications(user_id: int):
     a = await handle.get_notifications(user_id)
     return a
 
-@app.post("/products")
+@app.post("/sellproduct")
 async def products(data:model.Product):
     a = await handle.products(data)
     return a
