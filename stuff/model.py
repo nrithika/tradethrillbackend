@@ -66,8 +66,11 @@ class Report(BaseModel):
     reported_id: int
 
 class Notifications(BaseModel):
+    pid: int
     seller_id: int
     buyer_id: int
+
+
 
 
 

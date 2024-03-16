@@ -228,12 +228,23 @@ async def notify_accept(data:model.Notifications):
     time = datetime.today().strftime('%Y-%m-%d')
     query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 1)"""
     cursor.execute(query)
+    query = f"""
+update products set status = TRUE where pid = {data.pid}
+"""
+    cursor.execute(query)
+    transactions({
+        "product_id": data.pid,
+        "seller_id":data.seller_id,
+        "buyer_id":data.buyer_id
+    })
     conn.commit()
     conn.close()
 
 async def notify_reject(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
+    query = f"""delete from notifications where from from_user={data.seller_id} and to_user = {data.buyer_id} and type = 0"""
+    cursor.execute(query)
     query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 2)"""
     cursor.execute(query)
     conn.commit()
@@ -259,21 +270,25 @@ async def get_notifications(user_id: int):
     3 someone messaged
     """
     query = f"""
-select from_name, type, time from (select u.name as from_name, n.time as time, n.type as type, 
+select from_name, from_id type, time, pid from (select u.name as from_name, n.from_user as from_id, n.time as time, n.pid as pid, n.type as type, 
     n.to_user as to_user  from notifications as n inner join users as u on u.user_id =n.from_user ) where to_user = {user_id}
 """
     conn, cursor = database.make_db()
     cursor.execute(query)
     results = cursor.fetchall()
     conn.close()
-    data = []
+    fulldata = []
     for result in results:
         data = {
             "from_name":result[0],
-            "type":result[1],
-            "time":result[2]
+            "from_id": result[1],            
+            "type":result[2],
+            "time":result[3],
+            "pid": result[4],
         }
-    return data
+        
+        fulldata.append(data)
+    return fulldata
 
 async def login(data:model.User):
     conn, cursor = database.make_db()
@@ -466,34 +481,47 @@ async def search(data: model.Search):           #do the code where spaces arent 
     conn, cursor = database.make_db()
 
     words = data.query.split()
-
-    title_conditions = " + ".join([f"CASE WHEN title ILIKE '%%{word}%%' THEN 1 ELSE 0 END" for word in words])
-    description_conditions = " + ".join([f"CASE WHEN description ILIKE '%%{word}%%' THEN 1 ELSE 0 END" for word in words])
-
-    search_query = f"""
-        SELECT 
-            p.*,
-            u.name AS seller_username,
-            u.email AS seller_email
-        FROM 
-            (SELECT 
-                p.*,
-                ({title_conditions}) AS title_score,
-                ({description_conditions}) AS description_score
-            FROM 
-                products p
-            WHERE 
-                ({title_conditions}) > 0 OR ({description_conditions}) > 0) AS p
-        JOIN
-            users u ON p.seller_id = u.user_id
-        ORDER BY 
-            (p.title_score + p.description_score) DESC
-    """
-    cursor.execute(search_query)
-    search_results = cursor.fetchall()
-
+    return_value = []
+    for word in words:
+        regex_word = f"%{word}%"
+        search_query = f"""
+SELECT s.product_id as product_id,
+s.title as product_title,
+s.sell_price as sell_price,
+s.seller_name as seller_name,
+s.seller_email as seller_email,
+s.product_image as product_image 
+FROM 
+(SELECT p.product_id as product_id,
+p.title as title,
+p.description as description,
+p.sell_price as sell_price,
+i.image as product_image,
+u.name as seller_name,
+u.email as seller_email
+FROM products as p
+LEFT JOIN product_images as i on p.product_id = i.product_id
+JOIN users as u on p.seller_id = u.user_id
+) as s
+WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
+"""
+        cursor.execute(search_query)
+        search_results = cursor.fetchall()
+        for result in search_results:
+            data = {
+                "product_id":result[0],
+                "product_title":result[1],
+                "sell_price":result[2],
+                "seller_name":result[3],
+                "seller_email":result[4],
+                "product_image":result[5]
+            }
+            if data in return_value:
+                continue
+            return_value.append(data)
     conn.close()
-    return search_results
+    print(return_value)
+    return return_value
 
 async def upload(data: model.ProductImage):
     # save the files locally
@@ -602,7 +630,6 @@ async def get_products():
                 "product_image": row[5]
             }
             products.append(product)
-        print(products)
         return products
     else:
         return []
@@ -621,9 +648,6 @@ async def get_specific_product(product_id: int):
         "description":result[5]
     }
     return data
-
-
-# remove product
 
 
 

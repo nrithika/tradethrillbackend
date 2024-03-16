@@ -101,7 +101,7 @@ async def transactions(data:model.Transactions):
     a = await handle.transactions(data)
     return a
 
-@app.get("/get_transactions")
+@app.get("/get_transactions/{user_id}")
 async def get_transactions(user_id: int):
     a = await handle.get_transactions(user_id)
     return a
