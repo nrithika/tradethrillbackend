@@ -283,8 +283,8 @@ select from_name, from_id type, time, pid from (select u.name as from_name, n.fr
             "from_name":result[0],
             "from_id": result[1],            
             "type":result[2],
-            "time":result[3],
-            "pid": result[4],
+            "time":result[3]
+            # "pid": result[4]
         }
         
         fulldata.append(data)
