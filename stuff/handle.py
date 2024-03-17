@@ -218,7 +218,7 @@ select user_id, email, name, photo, verified from users where user_id = '{user_i
 async def notify_request(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.buyer_id}', '{data.seller_id}', '{time}', 0)"""
+    query = f"""INSERT INTO notifications VAlUES ('{data.buyer_id}', '{data.seller_id}', '{time}', 0, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -226,10 +226,10 @@ async def notify_request(data:model.Notifications):
 async def notify_accept(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 1)"""
+    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 1, {data.pid})"""
     cursor.execute(query)
     query = f"""
-update products set status = TRUE where pid = {data.pid}
+update products set status = TRUE where product_id = {data.pid}
 """
     cursor.execute(query)
     transactions({
@@ -245,7 +245,7 @@ async def notify_reject(data:model.Notifications):
     time = datetime.today().strftime('%Y-%m-%d')
     query = f"""delete from notifications where from from_user={data.seller_id} and to_user = {data.buyer_id} and type = 0"""
     cursor.execute(query)
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 2)"""
+    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 2, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -253,7 +253,7 @@ async def notify_reject(data:model.Notifications):
 async def notify_message(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 3)"""
+    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 3, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -270,7 +270,7 @@ async def get_notifications(user_id: int):
     3 someone messaged
     """
     query = f"""
-select from_name, from_id type, time, pid from (select u.name as from_name, n.from_user as from_id, n.time as time, n.pid as pid, n.type as type, 
+select from_name, from_id, type, time, pid from (select u.name as from_name, n.from_user as from_id, n.time as time, n.pid as pid, n.type as type, 
     n.to_user as to_user  from notifications as n inner join users as u on u.user_id =n.from_user ) where to_user = {user_id}
 """
     conn, cursor = database.make_db()
@@ -283,12 +283,51 @@ select from_name, from_id type, time, pid from (select u.name as from_name, n.fr
             "from_name":result[0],
             "from_id": result[1],            
             "type":result[2],
-            "time":result[3]
-            # "pid": result[4]
+            "time":result[3],
+            "pid": result[4]
         }
         
         fulldata.append(data)
+    # print(fulldata)
     return fulldata
+
+# async def get_notifications(user_id: int):
+    """
+    notifications will have time, from_user, to_user, type, and product_title
+    type = enum{REQUEST TO BUY, ACCEPTED TO SELL, REJECTED TO SELL, SOME MESSAGED YOU}
+    It returns an array of objects of tuple of the order (<from_user_name>, <type_of_notification>, <time>, <product_title>)
+    0 request to buy
+    1 accepted to sell
+    2 rejected to sell
+    3 someone messaged
+    """
+    query = f"""
+    SELECT u.name AS from_name, n.from_user AS from_id, n.time AS time, n.pid AS pid, n.type AS type,
+           n.to_user AS to_user, p.title AS product_title
+    FROM notifications AS n
+    INNER JOIN users AS u ON u.user_id = n.from_user
+    INNER JOIN products AS p ON p.product_id = n.pid
+    WHERE to_user = {user_id}
+    """
+    conn, cursor = database.make_db()
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+    
+    fulldata = []
+    for result in results:
+        data = {
+            "from_name": result[0],
+            "from_id": result[1],
+            "type": result[2],
+            "time": result[3],
+            "pid": result[4],
+            "product_title": result[5]
+        }
+        fulldata.append(data)
+    
+    return fulldata
+
 
 async def login(data:model.User):
     conn, cursor = database.make_db()

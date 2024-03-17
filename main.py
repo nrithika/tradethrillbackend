@@ -71,7 +71,7 @@ async def notify_message(data:model.Notifications):
     a = await handle.notify_message(data)
     return a
 
-@app.get("/get_notifications")
+@app.get("/get_notifications/{user_id}")
 async def get_notifications(user_id: int):
     a = await handle.get_notifications(user_id)
     return a
