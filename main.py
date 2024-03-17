@@ -91,7 +91,7 @@ async def wishlist(data:model.Wishlist):
     a = await handle.wishlist(data)
     return a
 
-@app.get("/get_wishlist")
+@app.get("/get_wishlist/{user_id}")
 async def get_wishlist(user_id: int):
     a = await handle.get_wishlist(user_id)
     return a
@@ -132,7 +132,7 @@ async def get_products():
     a = await handle.get_products()
     return a
 
-@app.get("/get_specific_product")
+@app.get("/get_specific_product/{product_id}")
 async def get_specific_product(product_id: int):
     a = await handle.get_specific_product(product_id)
     return a
@@ -142,7 +142,10 @@ async def get_specific_product(product_id: int):
 
 
 
-
+@app.get("/on_sale/{user_id}")
+async def products_on_sale(user_id: int):
+    a = await handle.products_on_sale(user_id)
+    return a
 
 
 

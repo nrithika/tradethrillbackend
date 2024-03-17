@@ -27,7 +27,7 @@ def send_otp_email(receiver_email, otp):
     message.attach(MIMEText(body, 'plain'))
     # print("Reached")
 
-    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server = smtplib.SMTP('smtp.cc.iitk.ac.in', 465)
     server.starttls()
     server.login(sender_email, sender_password)
     text = message.as_string()
@@ -44,7 +44,7 @@ async def handle_register(data:model.User_For_Registration):
     
     if data.hashed_password != data.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    email = f"{data.user_id}@iitk.ac.in"
+    email = f"{data.user_id}@gmail.com"
     otp = random.randrange(100000, 999999, 1)
     try:
         send_otp_email(email, otp)
@@ -113,7 +113,7 @@ def otp_email_forgotpass(receiver_email, otp):
     # print("Reached")
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.cc.iitk.ac.in', 465)
         server.starttls()
         server.login(sender_email, sender_password)
         text = message.as_string()
@@ -440,9 +440,10 @@ async def wishlist(data:model.Wishlist):
 async def get_wishlist(user_id: int):
     conn, cursor = database.make_db()
     query = f"""SELECT products.seller_id, products.sell_price, products.cost_price, 
-                products.title, products.usage, products.description FROM 
+                products.title, products.usage, products.description, users.name FROM 
                 (select * from wishlist where buyer_id = {user_id}) 
-                as w inner join products on w.product_id = products.product_id"""
+                as w inner join products on w.product_id = products.product_id
+                inner join users on products.seller_id = users.user_id"""
     cursor.execute(query)
     results = cursor.fetchall()
     return_value = []
@@ -453,7 +454,8 @@ async def get_wishlist(user_id: int):
             "cost_price":result[2],
             "title":result[3],
             "usage":result[4],
-            "description":result[5]
+            "description":result[5],
+            "name":result[6]
         }
         return_value.append(data)
     return return_value
@@ -688,9 +690,29 @@ async def get_specific_product(product_id: int):
     }
     return data
 
-
-
-
+async def products_on_sale(user_id: int):
+    conn, cursor = database.make_db()
+    query = f"""SELECT product_id, sell_price, cost_price, title, nf_interests, usage, description, tags FROM products WHERE seller_id = {user_id}"""
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+    if results:
+        products = []
+        for row in results:
+            product = {
+                "product_id": row[0],
+                "sell_price": row[1],
+                "cost_price": row[2],
+                "title": row[3],
+                "nf_interests": row[4],
+                "usage": row[5],
+                "description": row[6]
+                # "tags": row[7]
+            }
+            products.append(product)
+        return products
+    else:
+        return []
 
 
 
