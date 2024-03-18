@@ -8,6 +8,7 @@ class User(BaseModel):
 
 class User_For_Registration(User):
     name:str
+    email:str
     confirm_password:str
 
 class OTP(BaseModel):

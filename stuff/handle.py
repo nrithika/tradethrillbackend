@@ -27,12 +27,37 @@ def send_otp_email(receiver_email, otp):
     message.attach(MIMEText(body, 'plain'))
     # print("Reached")
 
-    server = smtplib.SMTP('smtp.cc.iitk.ac.in', 465)
+    # server = smtplib.SMTP('smtp.cc.iitk.ac.in', 465)
+    server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(sender_email, sender_password)
     text = message.as_string()
     server.sendmail(sender_email, receiver_email, text)
     server.quit()
+
+# def send_otp_email(receiver_email, otp):
+#     try:
+#         # Setting up server
+#         server = smtplib.SMTP('smtp.gmail.com', 587)
+#         server.starttls()
+        
+#         sender_email =  os.getenv("OTP_SENDER_EMAIL") # Enter your email address
+#         sender_password = os.getenv("OTP_SENDER_PASSWORD") # Enter your email password
+#         server.login(sender_email, sender_password)
+        
+#         # Constructing email message
+#         body = f"Your OTP is: {otp}"
+#         subject = "OTP"
+#         message = f"Subject: {subject}\n\n{body}"
+        
+#         # Sending email
+#         server.sendmail(sender_email, receiver_email, message)
+#         print("OTP has been sent to", receiver_email)
+        
+#         # Quit server
+#         server.quit()
+#     except Exception as e:
+#         print("An error occurred while sending OTP:", str(e))
 
 async def handle_register(data:model.User_For_Registration):
     # print(data)
@@ -44,10 +69,10 @@ async def handle_register(data:model.User_For_Registration):
     
     if data.hashed_password != data.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    email = f"{data.user_id}@gmail.com"
+    # email = f"{data.user_id}@iitk.ac.in"
     otp = random.randrange(100000, 999999, 1)
     try:
-        send_otp_email(email, otp)
+        send_otp_email(data.email, otp)
     except Exception as e:
         #error in sending otp
         raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
@@ -57,7 +82,7 @@ async def handle_register(data:model.User_For_Registration):
         cursor.execute(check_query)
         result = cursor.fetchall()
         if result == []:
-            query = f"""insert into users values('{data.user_id}', '{email}', '{data.hashed_password}', '{data.name}', NULL, '{otp}', FALSE)"""
+            query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', NULL, '{otp}', FALSE)"""
             cursor.execute(query)
             conn.commit()
             return data
@@ -113,7 +138,7 @@ def otp_email_forgotpass(receiver_email, otp):
     # print("Reached")
 
     try:
-        server = smtplib.SMTP('smtp.cc.iitk.ac.in', 465)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
         text = message.as_string()
@@ -144,7 +169,10 @@ async def forgot_password(data:model.ForgotPassword):
         elif not user[0]:
             raise HTTPException(status_code=400, detail="User is not verified")
 
-        email = f"{data.user_id}@iitk.ac.in"
+        get_email = f"SELECT email FROM users WHERE user_id = '{data.user_id}'"
+        cursor.execute(get_email)
+        email = cursor.fetchone()
+        email = email[0]
         otp = random.randrange(100000, 999999, 1)
         otp_email_forgotpass(email, otp)
 
@@ -155,6 +183,7 @@ async def forgot_password(data:model.ForgotPassword):
     except Exception as e:
         #error in reseting password
         conn.rollback()  # Rollback any pending changes
+        print(e)
         raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     finally:
         conn.close()
@@ -677,16 +706,22 @@ async def get_products():
 
 async def get_specific_product(product_id: int):
     conn, cursor = database.make_db()
-    query = f"""SELECT seller_id, sell_price, cost_price, title, usage, description FROM products WHERE product_id = {product_id} """
+    query = f"""SELECT p.seller_id, u.name as seller_name, u.email as seller_email,
+    p.sell_price, p.cost_price, p.title, p.usage, p.description
+    FROM products p 
+    INNER JOIN users u ON p.seller_id = u.user_id
+    WHERE product_id = {product_id} """
     cursor.execute(query)
     result = cursor.fetchone()
     data = {
         "seller_id":result[0],
-        "sell_price":result[1],
-        "cost_price":result[2],
-        "title":result[3],
-        "usage":result[4],
-        "description":result[5]
+        "seller_name":result[1],
+        "seller_email":result[2],
+        "sell_price":result[3],
+        "cost_price":result[4],
+        "title":result[5],
+        "usage":result[6],
+        "description":result[7]
     }
     return data
 
