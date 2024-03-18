@@ -786,21 +786,21 @@ async def products_on_sale(user_id: int):
 
 
 # just checking
-async def fun(data:model.Product):
-    conn, cursor = database.make_db()
-    cursor.execute("SELECT MAX(product_id) FROM fun")
-    result = cursor.fetchone()
-    if result and result[0]:
-        product_id = int(result[0]) + 1
-    else:
-        product_id = 100000
+# async def fun(data:model.Product):
+#     conn, cursor = database.make_db()
+#     cursor.execute("SELECT MAX(product_id) FROM fun")
+#     result = cursor.fetchone()
+#     if result and result[0]:
+#         product_id = int(result[0]) + 1
+#     else:
+#         product_id = 100000
     
 
-    concat = data.title.replace(" ", "").lower() + data.description.replace(" ", "").lower()
+#     concat = data.title.replace(" ", "").lower() + data.description.replace(" ", "").lower()
 
-    query = f"""insert into fun values ('{product_id}', '{concat}')"""
-    cursor.execute(query)
+#     query = f"""insert into fun values ('{product_id}', '{concat}')"""
+#     cursor.execute(query)
 
-    conn.commit()
-    conn.close()
-    return data
+#     conn.commit()
+#     conn.close()
+#     return data

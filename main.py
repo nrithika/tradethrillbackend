@@ -161,10 +161,10 @@ async def products_on_sale(user_id: int):
 # just checking
 
 
-@app.post("/fun")
-async def fun(data:model.Fun):
-    a = await handle.fun(data)
-    return a
+# @app.post("/fun")
+# async def fun(data:model.Fun):
+#     a = await handle.fun(data)
+#     return a
 
 # @app.get("/searching")
 # async def searching(query: str):

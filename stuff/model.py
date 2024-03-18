@@ -80,7 +80,7 @@ class Notifications(BaseModel):
 
 
 # just checking
-class Fun(BaseModel):
-    # product_id: int
-    title: str
-    description: str
+# class Fun(BaseModel):
+#     # product_id: int
+#     title: str
+#     description: str
