@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-origins = ["http://localhost:3000", "http://localhost:3000/"]       #write the server of frontend in your laptop
+origins = ["http://localhost:3000", "http://localhost:3000/", "https://tradethrill.netlify.app"]       #write the server of frontend in your laptop
 
 app.add_middleware(
     CORSMiddleware,
