@@ -8,13 +8,21 @@ This project is made as part of our course project - CS253 - Software Developmen
 ---
 
 ###  The initial setup for your Backend.
-* clone the project by running the below command in the terminal
+* Clone the project by running the below command in the terminal
   ```
       git clone https://github.com/nrithika/tradethrillbackend.git
   ```
-* make sure to install python before starting with the installation processes.
-* you are ready with the initial setup.
+* Make sure to install python before starting with the installation processes.
+* Once Python is installed, navigate to the project directory in your terminal and create a virtual environment (optional but recommended). Then activate the virtual environment.
+* Install the required Python dependencies from the requirements.txt file:
+  ```
+     pip install -r requirements.txt
+  ```
+* You are ready with the initial setup.
 
----
 
-### To run the project for the frontend.
+### To run the project for the backend.
+Open your terminal. Make sure you activate your virtual environment if you've the setup. Then run the following command.
+```
+   uvicorn app.main:app --reload
+```
