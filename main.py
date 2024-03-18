@@ -2,6 +2,11 @@ from fastapi import FastAPI
 from stuff import model
 from stuff import handle
 # from fastapi import FastAPI, Depends, UploadFile, Header
+
+from fastapi import WebSocket
+from typing import List
+
+
 from fastapi.middleware.cors import CORSMiddleware
 # from tasks import tasks, models
 
@@ -78,12 +83,14 @@ async def get_notifications(user_id: int):
 
 @app.post("/sellproduct")
 async def products(data:model.Product):
+    print("Hello")
     a = await handle.products(data)
     return a
 
 @app.post("/upload_product_images")
 async def upload_file(file: model.ProductImage):
-    await handle.upload(file)
+    print(file.pid)
+    # await handle.upload(file)
     return {"message": "File uploaded successfully and processed."}
 
 @app.post("/wishlist")
@@ -163,3 +170,60 @@ async def fun(data:model.Fun):
 # async def searching(query: str):
 #     a = await handle.searching(query)
 #     return a
+
+
+
+
+
+# backend/main.py
+
+
+# Store all active websocket connections
+active_connections = []
+# Store conversation history
+conversation_history = {}
+
+# WebSocket endpoint
+@app.websocket("/chat/{user_id}")
+async def chat(websocket: WebSocket, user_id: str):
+    await websocket.accept()
+    active_connections.append((user_id, websocket))
+
+    try:
+        while True:
+            message = await websocket.receive_text()
+            await handle_message(message, user_id)
+    except Exception:
+        active_connections.remove((user_id, websocket))
+
+async def handle_message(message: str, sender_id: str):
+    # Parse message data
+    data = json.loads(message)
+    if data['type'] == 'message':
+        receiver = data['receiver']
+        # Store message in conversation history
+        if receiver in conversation_history:
+            conversation_history[receiver].append({
+                'sender': sender_id,
+                'content': data['content']
+            })
+        else:
+            conversation_history[receiver] = [{
+                'sender': sender_id,
+                'content': data['content']
+            }]
+        # Send message to the receiver if online
+        for user_id, connection in active_connections:
+            if user_id == receiver:
+                await connection.send_text(data['content'])
+    elif data['type'] == 'history':
+        receiver = data['user']
+        # Send conversation history to the sender
+        if receiver in conversation_history:
+            history = conversation_history[receiver]
+            for message in history:
+                await sender_websocket.send_text(message['content'])
+
+@app.get("/users", response_model=List[str])
+async def get_users():
+    return list(conversation_history.keys())

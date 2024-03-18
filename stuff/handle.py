@@ -419,7 +419,7 @@ async def products(data:model.Product, files: List[UploadFile] = File(...)):    
     else:
         product_id = 100000
     
-    query = f"""insert into products values ('{product_id}', '{data.seller_id}', '{data.sell_price}', '{data.cost_price}', '{data.title}', NULL, '{data.usage}', '{data.description}', '{data.tags}')"""
+    query = f"""insert into products values ('{product_id}', '{data.seller_id}', '{data.sell_price}', '{data.cost_price}', '{data.title}', 0, '{data.usage}', '{data.description}', '{data.tags}')"""
     cursor.execute(query)
 
     # image_urls = []
@@ -430,7 +430,9 @@ async def products(data:model.Product, files: List[UploadFile] = File(...)):    
     # await insert_product_images(product_id, image_urls)
     conn.commit()
     conn.close()
-    return data
+    return {
+        "pid": product_id 
+    }
 
 async def update_interests(product_id):
     conn, cursor = database.make_db()
@@ -599,17 +601,15 @@ async def upload(data: model.ProductImage):
     conn, cursor = database.make_db()
     pid = data.pid
     files = []
-    files.append(data.Image1)
-    files.append(data.Image2)
-    files.append(data.Image3)
-    files.append(data.Image4)
-    files.append(data.Image5)
+    files.append(data.Image)
     try:
         for file in files:
             curr_dir = os.getcwd()
-            await file.save(f"{curr_dir}/stuff/file_buffer/{file.filename}")
-            print("File added")
             file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
+            await file.save(file_path)
+            print("File added")
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
             query = f"""INSERT INTO product_images VALUES ({pid}, pg_read_binary_file('{file_path}')::bytea)"""
             cursor.execute(query)
             os.remove(file_path)
@@ -617,7 +617,29 @@ async def upload(data: model.ProductImage):
         conn.commit()
     except Exception as e:
         print(f"Could not upload file")
-        print(e)
+
+# async def upload(data: model.ProductImage):
+#     conn, cursor = database.make_db()
+#     pid = data.pid
+#     files = []
+#     files.append(data.Image1)
+#     try:
+#         for file in files:
+#             curr_dir = os.getcwd()
+#             file_bytes = await file.read()  # Read file content as bytes
+#             file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
+#             with open(file_path, "wb") as f:
+#                 f.write(file_bytes)  # Write file content as bytes
+#             print("File added")
+#             query = f"""INSERT INTO product_images VALUES (%s, %s)"""
+#             cursor.execute(query, (pid, file_bytes))  # Insert binary data directly
+#             print("File inserted into database")
+#         conn.commit()
+#     except Exception as e:
+#         print(f"Could not upload file: {e}")
+#     finally:
+#         conn.close()
+
 
 async def edit_profile(data: model.EditProfile):
     conn, cursor = database.make_db()
@@ -645,13 +667,18 @@ async def edit_profile(data: model.EditProfile):
 
 async def report_user(data: model.Report):
     conn, cursor = database.make_db()
+    query = f"SELECT seller_id FROM products WHERE product_id = {data.product_id}"
+    cursor.execute(query)
+    result = cursor.fetchone()
+    if result:
+        reported_id = result[0]
     cursor.execute("SELECT COUNT(*) FROM reports WHERE reporter_id = %s AND reported_id = %s",
-                   (data.reporter_id, data.reported_id))
+                   (data.reporter_id, reported_id))
     if cursor.fetchone()[0] > 0:
         raise HTTPException(status_code=400, detail="User has already been reported by this reporter")
 
     cursor.execute("INSERT INTO reports (reporter_id, reported_id) VALUES (%s, %s)",
-                   (data.reporter_id, data.reported_id))
+                   (data.reporter_id, reported_id))
     conn.commit()
 
     return {"message": "User reported successfully"}

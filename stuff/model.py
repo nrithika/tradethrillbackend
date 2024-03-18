@@ -37,11 +37,7 @@ class Product(BaseModel):
 
 class ProductImage(BaseModel):
     pid: int
-    Image1: Optional[Union[UploadFile, None]] = None
-    Image2: Optional[Union[UploadFile, None]] = None
-    Image3: Optional[Union[UploadFile, None]] = None
-    Image4: Optional[Union[UploadFile, None]] = None
-    Image5: Optional[Union[UploadFile, None]] = None
+    Image: Optional[UploadFile] = None
 
 class Wishlist(BaseModel):
     product_id:int
@@ -63,8 +59,9 @@ class Search(BaseModel):
 #     image_url: str
     
 class Report(BaseModel):
+    product_id: int
     reporter_id: int
-    reported_id: int
+    # reported_id: int
 
 class Notifications(BaseModel):
     pid: int
