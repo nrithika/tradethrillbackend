@@ -1,9 +1,16 @@
 from stuff import model
 from stuff import database
 from fastapi import HTTPException
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 from typing import List
 from datetime import datetime
+
+from PIL import Image
+from io import BytesIO
+
+import base64
+
+import json
 
 import smtplib
 import random
@@ -34,30 +41,6 @@ def send_otp_email(receiver_email, otp):
     text = message.as_string()
     server.sendmail(sender_email, receiver_email, text)
     server.quit()
-
-# def send_otp_email(receiver_email, otp):
-#     try:
-#         # Setting up server
-#         server = smtplib.SMTP('smtp.gmail.com', 587)
-#         server.starttls()
-        
-#         sender_email =  os.getenv("OTP_SENDER_EMAIL") # Enter your email address
-#         sender_password = os.getenv("OTP_SENDER_PASSWORD") # Enter your email password
-#         server.login(sender_email, sender_password)
-        
-#         # Constructing email message
-#         body = f"Your OTP is: {otp}"
-#         subject = "OTP"
-#         message = f"Subject: {subject}\n\n{body}"
-        
-#         # Sending email
-#         server.sendmail(sender_email, receiver_email, message)
-#         print("OTP has been sent to", receiver_email)
-        
-#         # Quit server
-#         server.quit()
-#     except Exception as e:
-#         print("An error occurred while sending OTP:", str(e))
 
 async def handle_register(data:model.User_For_Registration):
     # print(data)
@@ -390,27 +373,8 @@ async def login(data:model.User):
 
     # return False
 
-# IMAGES_DIR = "images/products"
-# os.makedirs(IMAGES_DIR, exist_ok=True)
 
-# async def save_uploaded_file(file: UploadFile) -> str:
-#     file_path = os.path.join(IMAGES_DIR, file.filename)
-#     with open(file_path, "wb") as buffer:
-#         buffer.write(await file.read())
-#     return file_path
-
-# async def insert_product_images(product_id: int, image_urls: List[str]):
-#     conn, cursor = database.make_db()
-
-#     try:
-#         for image_url in image_urls:
-#             await cursor.execute("INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)", product_id, image_url)
-#             conn.commit()
-#     finally:
-#         await conn.close()
-
-
-async def products(data:model.Product, files: List[UploadFile] = File(...)):            #check the files code
+async def products(file: UploadFile = File(...), data: str = Form(...)):
     conn, cursor = database.make_db()
     cursor.execute("SELECT MAX(product_id) FROM products")
     result = cursor.fetchone()
@@ -418,18 +382,28 @@ async def products(data:model.Product, files: List[UploadFile] = File(...)):    
         product_id = int(result[0]) + 1
     else:
         product_id = 100000
-    
-    query = f"""insert into products values ('{product_id}', '{data.seller_id}', '{data.sell_price}', '{data.cost_price}', '{data.title}', 0, '{data.usage}', '{data.description}', '{data.tags}')"""
+    print(data)
+    got = json.loads(data)
+    print(got)
+    print(file.filename)
+    cwd = os.getcwd()
+    path = f"{os.getcwd()}/stuff/file_buffer/{file.filename}"
+    image_data = await file.read()
+    # print(image_data)
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    query = f"""insert into products values ('{product_id}', '{got['seller_id']}', '{got['sell_price']}', '{got['cost_price']}', '{got['title']}', 0, '{got['usage']}', '{got['description']}', '{got['tags']}')"""
     cursor.execute(query)
+    conn.commit()
+    # print(image_data)
+    upload_query = f"""insert into product_images values ('{product_id}', pg_read_binary_file('{path}')::bytea)"""
 
-    # image_urls = []
-    # for file in files:
-    #     file_path = await save_uploaded_file(file)
-    #     image_urls.append(file_path)
-        
-    # await insert_product_images(product_id, image_urls)
+    # image_query = f"""INSERT INTO product_images (product_id, image) VALUES (%s, %s)"""
+    cursor.execute(upload_query)
     conn.commit()
     conn.close()
+    os.remove(path)
+    print("file removed")
     return {
         "pid": product_id 
     }
@@ -470,7 +444,7 @@ async def wishlist(data:model.Wishlist):
 
 async def get_wishlist(user_id: int):
     conn, cursor = database.make_db()
-    query = f"""SELECT products.seller_id, products.sell_price, products.cost_price, 
+    query = f"""SELECT products.product_id, products.seller_id, products.sell_price, products.cost_price, 
                 products.title, products.usage, products.description, users.name FROM 
                 (select * from wishlist where buyer_id = {user_id}) 
                 as w inner join products on w.product_id = products.product_id
@@ -480,13 +454,14 @@ async def get_wishlist(user_id: int):
     return_value = []
     for result in results:
         data = {
-            "seller_id":result[0],
-            "sell_price":result[1],
-            "cost_price":result[2],
-            "title":result[3],
-            "usage":result[4],
-            "description":result[5],
-            "name":result[6]
+            "product_id":result[0],
+            "seller_id":result[1],
+            "sell_price":result[2],
+            "cost_price":result[3],
+            "title":result[4],
+            "usage":result[5],
+            "description":result[6],
+            "name":result[7]
         }
         return_value.append(data)
     return return_value
@@ -595,50 +570,29 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
     print(return_value)
     return return_value
 
-async def upload(data: model.ProductImage):
-    # save the files locally
-    # save the files in db
-    conn, cursor = database.make_db()
-    pid = data.pid
-    files = []
-    files.append(data.Image)
-    try:
-        for file in files:
-            curr_dir = os.getcwd()
-            file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
-            await file.save(file_path)
-            print("File added")
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
-            query = f"""INSERT INTO product_images VALUES ({pid}, pg_read_binary_file('{file_path}')::bytea)"""
-            cursor.execute(query)
-            os.remove(file_path)
-            print("File removed")
-        conn.commit()
-    except Exception as e:
-        print(f"Could not upload file")
-
-# async def upload(data: model.ProductImage):
+# async def upload(data: model.ProductImage, file: UploadFile = File(...)):
+#     # save the files locally
+#     # save the files in db
 #     conn, cursor = database.make_db()
 #     pid = data.pid
 #     files = []
-#     files.append(data.Image1)
+#     files.append(data.Image)
 #     try:
-#         for file in files:
+#         for file in file:
 #             curr_dir = os.getcwd()
-#             file_bytes = await file.read()  # Read file content as bytes
 #             file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
-#             with open(file_path, "wb") as f:
-#                 f.write(file_bytes)  # Write file content as bytes
+#             await file.save(file_path)
 #             print("File added")
-#             query = f"""INSERT INTO product_images VALUES (%s, %s)"""
-#             cursor.execute(query, (pid, file_bytes))  # Insert binary data directly
-#             print("File inserted into database")
+#             with open(file_path, "wb") as f:
+#                 f.write(await file.read())
+#             query = f"""INSERT INTO product_images VALUES ({pid}, pg_read_binary_file('{file_path}')::bytea)"""
+#             cursor.execute(query)
+#             os.remove(file_path)
+#             print("File removed")
 #         conn.commit()
 #     except Exception as e:
-#         print(f"Could not upload file: {e}")
-#     finally:
-#         conn.close()
+#         print(f"Could not upload file")
+
 
 
 async def edit_profile(data: model.EditProfile):
@@ -697,6 +651,19 @@ async def view_profile(user_id: int):
     
 async def get_products():
     conn, cursor = database.make_db()
+    # query = """
+    # SELECT 
+    #     p.product_id,
+    #     p.title AS product_title,
+    #     p.sell_price,
+    #     u.name AS seller_name,
+    #     u.email AS seller_email
+    # FROM 
+    #     products p
+    # JOIN 
+    #     users u ON p.seller_id = u.user_id
+    # """
+    
     query = """
     SELECT 
         p.product_id,
@@ -712,21 +679,41 @@ async def get_products():
     LEFT JOIN 
         product_images i ON p.product_id = i.product_id
     """
+    
     cursor.execute(query)
     results = cursor.fetchall()
-    conn.close()
     if results:
         products = []
         for row in results:
+            # product_id = row[0]
+            # image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
+            # cursor.execute(image_query)
+            # result = cursor.fetchone()
+            # conn.close()
+            # if result:
+            #     image = result[0]
+            # else:
+            #     image = None
+            # if image:
+            #     image_file = f"{os.getcwd()}/stuff/file_buffer/{product_id}.png"
+            #     with open(image_file, "rb") as img_file:
+            #         img_data = img_file.read()
+            #         # Encode the image data as base64
+            #         base64_img = base64.b64encode(img_data).decode()
+            # else:
+            #     base64_img = None
             product = {
                 "product_id": row[0],
                 "product_title": row[1],
                 "sell_price": row[2],
                 "seller_name": row[3],
                 "seller_email": row[4],
+                # "product_image": base64_img
                 "product_image": row[5]
             }
             products.append(product)
+        
+        conn.close()
         return products
     else:
         return []

@@ -26,18 +26,18 @@ class EditProfile(BaseModel):
     name: str
     photo:str
 
-class Product(BaseModel):
-    seller_id:int
-    sell_price:int
-    cost_price:int
-    title:str
-    usage:int
-    description:str
-    tags:str
+# class Product(BaseModel):
+#     seller_id:int
+#     sell_price:int
+#     cost_price:int
+#     title:str
+#     usage:int
+#     description:str
+#     tags:str
 
-class ProductImage(BaseModel):
-    pid: int
-    Image: Optional[UploadFile] = None
+# class ProductImage(BaseModel):
+#     pid: int
+#     Image: Optional[UploadFile]
 
 class Wishlist(BaseModel):
     product_id:int

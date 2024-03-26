@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from stuff import model
 from stuff import handle
 # from fastapi import FastAPI, Depends, UploadFile, Header
+from fastapi import UploadFile, File, Form
 
 from fastapi import WebSocket
 from typing import List
@@ -12,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-origins = ["http://localhost:3000", "http://localhost:3000/", "https://tradethrill.netlify.app"]       #write the server of frontend in your laptop
+origins = ["http://localhost:3000", "https://tradethrill.netlify.app"]       #write the server of frontend in your laptop
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,6 +49,7 @@ async def new_otp(data:model.OTP):
 
 @app.post("/login")
 async def login(data:model.User):
+    # print("hello")
     a = await handle.login(data)
     return a
 
@@ -82,16 +84,16 @@ async def get_notifications(user_id: int):
     return a
 
 @app.post("/sellproduct")
-async def products(data:model.Product):
-    print("Hello")
-    a = await handle.products(data)
+async def products(file: UploadFile = File(...), data: str = Form(...)):
+    # print("Hello")
+    a = await handle.products(file, data)
     return a
 
-@app.post("/upload_product_images")
-async def upload_file(file: model.ProductImage):
-    print(file.pid)
-    # await handle.upload(file)
-    return {"message": "File uploaded successfully and processed."}
+# @app.post("/upload_product_images")
+# async def upload_file(file: model.ProductImage):
+#     print(file.pid)
+#     await handle.upload(file)
+#     return {"message": "File uploaded successfully and processed."}
 
 @app.post("/wishlist")
 async def wishlist(data:model.Wishlist):
