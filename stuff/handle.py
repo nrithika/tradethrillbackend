@@ -382,22 +382,24 @@ async def products(file: UploadFile = File(...), data: str = Form(...)):
         product_id = int(result[0]) + 1
     else:
         product_id = 100000
-    print(data)
+    # print(data)
     got = json.loads(data)
-    print(got)
-    print(file.filename)
-    cwd = os.getcwd()
-    path = f"{os.getcwd()}/stuff/file_buffer/{file.filename}"
-    image_data = await file.read()
+    # print(got)
+    # print(file.filename)
+    # cwd = os.getcwd()
+    path = f"/tmp/{product_id}.png"
+    print(path)
+    # image_data = await file.read()
     # print(image_data)
     with open(path, "wb") as f:
         f.write(await file.read())
+    print("Reached here")
     query = f"""insert into products values ('{product_id}', '{got['seller_id']}', '{got['sell_price']}', '{got['cost_price']}', '{got['title']}', 0, '{got['usage']}', '{got['description']}', '{got['tags']}')"""
     cursor.execute(query)
     conn.commit()
     # print(image_data)
     upload_query = f"""insert into product_images values ('{product_id}', pg_read_binary_file('{path}')::bytea)"""
-
+    print(upload_query)
     # image_query = f"""INSERT INTO product_images (product_id, image) VALUES (%s, %s)"""
     cursor.execute(upload_query)
     conn.commit()
@@ -651,18 +653,6 @@ async def view_profile(user_id: int):
     
 async def get_products():
     conn, cursor = database.make_db()
-    # query = """
-    # SELECT 
-    #     p.product_id,
-    #     p.title AS product_title,
-    #     p.sell_price,
-    #     u.name AS seller_name,
-    #     u.email AS seller_email
-    # FROM 
-    #     products p
-    # JOIN 
-    #     users u ON p.seller_id = u.user_id
-    # """
     
     query = """
     SELECT 
@@ -685,23 +675,27 @@ async def get_products():
     if results:
         products = []
         for row in results:
-            # product_id = row[0]
-            # image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
-            # cursor.execute(image_query)
-            # result = cursor.fetchone()
-            # conn.close()
-            # if result:
-            #     image = result[0]
-            # else:
-            #     image = None
-            # if image:
-            #     image_file = f"{os.getcwd()}/stuff/file_buffer/{product_id}.png"
-            #     with open(image_file, "rb") as img_file:
-            #         img_data = img_file.read()
-            #         # Encode the image data as base64
-            #         base64_img = base64.b64encode(img_data).decode()
-            # else:
-            #     base64_img = None
+            product_id = row[0]
+            image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
+            cursor.execute(image_query)
+            result = cursor.fetchone()
+            if result:
+                image = result[0]
+            else:
+                image = None
+            if image:
+                image_file = f"{os.getcwd()}/stuff/file_buffer/{product_id}.png"
+                # with open(image_file, "rb") as img_file:
+                #     img_data = img_file.read()
+                #     # Encode the image data as base64
+                #     base64_img = base64.b64encode(img_data).decode()
+                with open(image_file, "wb") as file:
+                    file.write(image)
+                with open(image_file, "rb") as f:
+                  img_data = f.read()
+                  base64_image_data = base64.b64encode(img_data).decode()
+            else:
+                base64_img = None
             product = {
                 "product_id": row[0],
                 "product_title": row[1],
@@ -709,11 +703,11 @@ async def get_products():
                 "seller_name": row[3],
                 "seller_email": row[4],
                 # "product_image": base64_img
-                "product_image": row[5]
+                "product_image": base64_image_data
             }
             products.append(product)
-        
         conn.close()
+        os.remove(image_file)
         return products
     else:
         return []

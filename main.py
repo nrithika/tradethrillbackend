@@ -13,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-origins = ["http://localhost:3000", "https://tradethrill.netlify.app"]       #write the server of frontend in your laptop
+# origins = ["http://localhost:3000", "https://tradethrill.netlify.app"]       #write the server of frontend in your laptop
+origins = ["*"]       #write the server of frontend in your laptop
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +31,7 @@ async def read_root():
 @app.post("/register")
 async def register(data:model.User_For_Registration):
     a = await handle.handle_register(data)
-    return a  
+    return a
 
 @app.post("/otp")
 async def otp(data:model.OTP):
@@ -86,8 +87,9 @@ async def get_notifications(user_id: int):
 @app.post("/sellproduct")
 async def products(file: UploadFile = File(...), data: str = Form(...)):
     # print("Hello")
-    a = await handle.products(file, data)
-    return a
+    # print(data)
+    a = await handle.products(file, data) 
+    return None
 
 # @app.post("/upload_product_images")
 # async def upload_file(file: model.ProductImage):
