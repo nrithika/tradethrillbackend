@@ -420,27 +420,37 @@ async def update_interests(product_id):
 async def wishlist(data:model.Wishlist):
     conn, cursor = database.make_db()
     try:
-        query = f"SELECT seller_id FROM products WHERE product_id = '{data.product_id}'"
-        cursor.execute(query)
-        result = cursor.fetchone()
+        product_existing = f"SELECT * FROM wishlist WHERE product_id = '{data.product_id}' AND buyer_id = '{data.buyer_id}'"
+        cursor.execute(product_existing)
+        existing_result = cursor.fetchone()
 
-        if result:
-            seller_id = result[0]
-            insert_query = f"insert into wishlist values('{data.product_id}', '{seller_id}', '{data.buyer_id}')"
-            cursor.execute(insert_query)
-            conn.commit()
-
-            await update_interests(data.product_id)
-
-            return data
+        if existing_result:
+            raise HTTPException(status_code=400, detail="Product already exists in the wishlist")
         
         else:
-            raise HTTPException(status_code=404, detail="Product not found")
+            query = f"SELECT seller_id FROM products WHERE product_id = '{data.product_id}'"
+            cursor.execute(query)
+            result = cursor.fetchone()
+
+            if result:
+                seller_id = result[0]
+                if seller_id == data.buyer_id:
+                    raise HTTPException(status_code=400, detail="You cannot add your own product to your wishlist")
+                else:
+                    insert_query = f"insert into wishlist values('{data.product_id}', '{seller_id}', '{data.buyer_id}')"
+                    cursor.execute(insert_query)
+                    conn.commit()
+
+                    await update_interests(data.product_id)
+
+                    return data
+            
+            else:
+                raise HTTPException(status_code=404, detail="Product not found")
     
     except Exception as e:
-        #Error in adding to wishlist
         conn.rollback()
-        raise HTTPException(status_code=500, detail= "Unternal server error. Please try again later")
+        raise HTTPException(status_code=500, detail= "Internal server error. Please try again later")
     finally:
         conn.close()
 
@@ -557,45 +567,44 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
         cursor.execute(search_query)
         search_results = cursor.fetchall()
         for result in search_results:
+            product_id = result[0]
+            image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
+            cursor.execute(image_query)
+            result = cursor.fetchone()
+            if result:
+                image = result[0]
+            else:
+                image = None
+            if image:
+                image_file = f"{os.getcwd()}/stuff/file_buffer/{product_id}.png"
+                # with open(image_file, "rb") as img_file:
+                #     img_data = img_file.read()
+                #     # Encode the image data as base64
+                #     base64_img = base64.b64encode(img_data).decode()
+                with open(image_file, "wb") as file:
+                    file.write(image)
+                with open(image_file, "rb") as f:
+                  img_data = f.read()
+                  base64_image_data = base64.b64encode(img_data).decode()
+            else:
+                base64_img = None
             data = {
                 "product_id":result[0],
                 "product_title":result[1],
                 "sell_price":result[2],
                 "seller_name":result[3],
                 "seller_email":result[4],
-                "product_image":result[5]
+                # "product_image":result[5]
+                "product_image":base64_image_data
             }
             if data in return_value:
                 continue
             return_value.append(data)
     conn.close()
+    os.remove(image_file)
+
     print(return_value)
     return return_value
-
-# async def upload(data: model.ProductImage, file: UploadFile = File(...)):
-#     # save the files locally
-#     # save the files in db
-#     conn, cursor = database.make_db()
-#     pid = data.pid
-#     files = []
-#     files.append(data.Image)
-#     try:
-#         for file in file:
-#             curr_dir = os.getcwd()
-#             file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
-#             await file.save(file_path)
-#             print("File added")
-#             with open(file_path, "wb") as f:
-#                 f.write(await file.read())
-#             query = f"""INSERT INTO product_images VALUES ({pid}, pg_read_binary_file('{file_path}')::bytea)"""
-#             cursor.execute(query)
-#             os.remove(file_path)
-#             print("File removed")
-#         conn.commit()
-#     except Exception as e:
-#         print(f"Could not upload file")
-
-
 
 async def edit_profile(data: model.EditProfile):
     conn, cursor = database.make_db()
