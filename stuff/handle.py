@@ -570,9 +570,9 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
             product_id = result[0]
             image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
             cursor.execute(image_query)
-            result = cursor.fetchone()
-            if result:
-                image = result[0]
+            image_result = cursor.fetchone()
+            if image_result:
+                image = image_result[0]
             else:
                 image = None
             if image:
@@ -606,6 +606,9 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
     print(return_value)
     return return_value
 
+
+# clash of variable names
+# I renamed result to image_result in 2lines
 async def edit_profile(data: model.EditProfile):
     conn, cursor = database.make_db()
     user_id = data.user_id
