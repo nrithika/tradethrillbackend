@@ -280,8 +280,9 @@ async def get_user_info(user_id: int):
             "photo": base64_image_data,
             "verified": result[4]
         }
+        os.remove(image_file)
         return data
-    os.remove(image_file)
+
 
 async def notify_request(data:model.Notification):
     conn, cursor = database.make_db()
@@ -770,8 +771,8 @@ async def view_profile(user_id: int):
             "email": result[1],
             "pic": base64_image_data
         }    
-    os.remove(image_file)
-    return data
+        os.remove(image_file)
+        return data
 
 async def get_products():
     conn, cursor = database.make_db()
