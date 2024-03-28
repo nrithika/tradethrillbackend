@@ -280,7 +280,8 @@ async def get_user_info(user_id: int):
             "photo": base64_image_data,
             "verified": result[4]
         }
-    os.remove(image_file)
+    if image:
+        os.remove(image_file)
     return data
 
 
