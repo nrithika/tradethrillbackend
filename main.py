@@ -125,8 +125,8 @@ async def search(data:model.Search):
     return a
 
 @app.post("/edit_profile")
-async def edit_profile(file: model.EditProfile):
-    await handle.edit_profile(file)
+async def edit_profile(file: UploadFile = File(...), data: str = Form(...)):
+    await handle.edit_profile(file, data)
     return {"message": "File uploaded successfully and processed."}
 
 @app.post("/report")

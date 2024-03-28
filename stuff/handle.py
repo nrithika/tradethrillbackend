@@ -72,8 +72,10 @@ async def handle_register(data:model.User_For_Registration):
             except Exception as e:
                 #error in sending otp
                 raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
-            query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', NULL, '{otp}', FALSE)"""
+            query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', '{otp}', FALSE)"""
             cursor.execute(query)
+            pic_query = f"""insert into user_images values('{data.user_id}', NULL)"""
+            cursor.execute(pic_query)
             conn.commit()
         else:
             verified_query = f"""SELECT verified FROM users WHERE user_id = '{data.user_id}'"""
@@ -237,21 +239,49 @@ async def new_otp(data:model.OTP):
     
 async def get_user_info(user_id: int):
     # function for getting the data of the user and it has been made as a sub function so as to assist the login function
+#     query = f"""
+# select user_id, email, name, photo, verified from users where user_id = '{user_id}'
+# """
     query = f"""
-select user_id, email, name, photo, verified from users where user_id = '{user_id}'
-"""
+    SELECT u.user_id, u.email, u.name, ui.pic as photo, u.verified 
+    FROM users u 
+    JOIN user_images ui ON u.user_id = ui.user_id
+    WHERE u.user_id = '{user_id}'
+    """
     conn, cursor = database.make_db()
     cursor.execute(query)
-    results = cursor.fetchall()
-    results = results[0]
-    data = {
-        "user_id": user_id,
-        "email": results[1],
-        "name": results[2],
-        "photo": results[3],
-        "verified": results[4]
-    }
-    return data
+    result = cursor.fetchone()
+    image_query = f"SELECT pic FROM user_images WHERE user_id = '{user_id}'"
+    cursor.execute(image_query)
+    image_result = cursor.fetchone()
+    if image_result:
+        image = image_result[0]
+    else:
+        image = None
+    if image:
+        image_file = f"{os.getcwd()}/stuff/file_buffer/{user_id}.png"
+        # with open(image_file, "rb") as img_file:
+        #     img_data = img_file.read()
+        #     # Encode the image data as base64
+        #     base64_img = base64.b64encode(img_data).decode()
+        with open(image_file, "wb") as file:
+            file.write(image)
+        with open(image_file, "rb") as f:
+            img_data = f.read()
+            base64_image_data = base64.b64encode(img_data).decode()
+    else:
+        base64_image_data = None
+    # results = results[0]
+    if result:
+        data = {
+            "user_id": result[0],
+            "email": result[1],
+            "name": result[2],
+            "photo": base64_image_data,
+            "verified": result[4]
+        }
+        return data
+    os.remove(image_file)
 
 async def notify_request(data:model.Notification):
     conn, cursor = database.make_db()
@@ -635,29 +665,48 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
     # print(return_value)
     return return_value
 
-async def edit_profile(data: model.EditProfile):
+# async def edit_profile(data: model.EditProfile):
+#     conn, cursor = database.make_db()
+#     user_id = data.user_id
+#     files = []
+#     files.append(data.photo)
+#     try:
+#         for file in files:
+#             curr_dir = os.getcwd()
+#             await file.save(f"{curr_dir}/stuff/file_buffer/{file.filename}")
+#             print("File added")
+#             file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
+#             query = f"""UPDATE users SET photo = pg_read_binary_file('{file_path}')::bytea where user_id = {user_id}"""
+#             cursor.execute(query)
+#             os.remove(file_path)
+#             print("File removed")
+#         conn.commit()
+#     except Exception as e:
+#         print(f"Could not upload file")
+#         print(e)
+#     name_query = f"""UPDATE users SET name = {data.name} where user_id = {user_id}"""
+#     cursor.execute(name_query)
+#     conn.commit()
+#     conn.close()
+
+async def edit_profile(file: UploadFile = File(...), data: str = Form(...)):
     conn, cursor = database.make_db()
-    user_id = data.user_id
-    files = []
-    files.append(data.photo)
-    try:
-        for file in files:
-            curr_dir = os.getcwd()
-            await file.save(f"{curr_dir}/stuff/file_buffer/{file.filename}")
-            print("File added")
-            file_path = f"{curr_dir}/stuff/file_buffer/{file.filename}"
-            query = f"""UPDATE users SET photo = pg_read_binary_file('{file_path}')::bytea where user_id = {user_id}"""
-            cursor.execute(query)
-            os.remove(file_path)
-            print("File removed")
-        conn.commit()
-    except Exception as e:
-        print(f"Could not upload file")
-        print(e)
-    name_query = f"""UPDATE users SET name = {data.name} where user_id = {user_id}"""
-    cursor.execute(name_query)
+    got = json.loads(data)
+    path = f"/tmp/{got['user_id']}.png"
+    print(path)
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    update_query = f"""update users set name = '{got['name']}' where user_id = {got['user_id']}"""
+    cursor.execute(update_query)
+    conn.commit()
+    upload_query = f"""update user_images set pic = pg_read_binary_file('{path}')::bytea where user_id = {got['user_id']}"""
+    cursor.execute(upload_query)
     conn.commit()
     conn.close()
+    os.remove(path)
+    print("file removed")
+    return None
+
 
 async def report_user(data: model.Report):
     conn, cursor = database.make_db()
@@ -684,16 +733,46 @@ async def report_user(data: model.Report):
 
 async def view_profile(user_id: int):
     conn, cursor = database.make_db()
-    query = f"""SELECT name, email, photo FROM users WHERE user_id = {user_id}"""
+    # query = f"""SELECT name, email FROM users WHERE user_id = {user_id}"""
+    query = f"""
+        SELECT u.name, u.email, ui.pic
+        FROM users u
+        LEFT JOIN user_images ui ON u.user_id = ui.user_id
+        WHERE u.user_id = {user_id}
+    """
     cursor.execute(query)
     conn.close()
     result = cursor.fetchone()
-    if result:
-        name, email, photo = result
-        return {"name": name, "email": email, "photo": photo}
+    image_query = f"SELECT pic FROM user_images WHERE user_id = '{user_id}'"
+    cursor.execute(image_query)
+    image_result = cursor.fetchone()
+    if image_result:
+        image = image_result[0]
     else:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+        image = None
+    if image:
+        image_file = f"{os.getcwd()}/stuff/file_buffer/{user_id}.png"
+        # with open(image_file, "rb") as img_file:
+        #     img_data = img_file.read()
+        #     # Encode the image data as base64
+        #     base64_img = base64.b64encode(img_data).decode()
+        with open(image_file, "wb") as file:
+            file.write(image)
+        with open(image_file, "rb") as f:
+            img_data = f.read()
+            base64_image_data = base64.b64encode(img_data).decode()
+    else:
+        base64_img = None
+    if result:
+        # name, email, photo = result
+        data = {
+            "name": result[0],
+            "email": result[1],
+            "pic": base64_image_data
+        }    
+    os.remove(image_file)
+    return data
+
 async def get_products():
     conn, cursor = database.make_db()
     
@@ -808,17 +887,18 @@ async def get_specific_product(product_id: int):
             base64_image_data = base64.b64encode(img_data).decode()
     else:
         base64_img = None
-    data = {
-        "seller_id":result[0],
-        "sell_price":result[1],
-        "cost_price":result[2],
-        "title":result[3],
-        "usage":result[4],
-        "description":result[5],
-        "seller_name":result[6],
-        "seller_email":result[7],
-        "product_image": base64_image_data
-    }
+    if result:
+        data = {
+            "seller_id":result[0],
+            "sell_price":result[1],
+            "cost_price":result[2],
+            "title":result[3],
+            "usage":result[4],
+            "description":result[5],
+            "seller_name":result[6],
+            "seller_email":result[7],
+            "product_image": base64_image_data
+        }
     os.remove(image_file)
     return data
 
