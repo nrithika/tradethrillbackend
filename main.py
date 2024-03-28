@@ -7,6 +7,7 @@ from fastapi import UploadFile, File, Form
 from fastapi import WebSocket
 from typing import List
 
+import json
 
 from fastapi.middleware.cors import CORSMiddleware
 # from tasks import tasks, models
@@ -60,7 +61,7 @@ async def login(data:model.User):
 #     return a
 
 @app.post("/notify_request")
-async def notify_request(data:model.Notifications):
+async def notify_request(data:model.Notification):
     a = await handle.notify_request(data)
     return a
 
@@ -119,6 +120,7 @@ async def get_transactions(user_id: int):
 
 @app.post("/search")
 async def search(data:model.Search):
+    print(data)
     a = await handle.search(data)
     return a
 
@@ -182,12 +184,72 @@ async def products_on_sale(user_id: int):
 # backend/main.py
 
 
-# Store all active websocket connections
+# # Store all active websocket connections
+# active_connections = []
+# # Store conversation history
+# conversation_history = {}
+
+# # WebSocket endpoint
+# @app.websocket("/chat/{user_id}")
+# async def chat(websocket: WebSocket, user_id: str):
+#     await websocket.accept()
+#     active_connections.append((user_id, websocket))
+
+#     try:
+#         while True:
+#             message = await websocket.receive_text()
+#             await handle_message(message, user_id)
+#     except Exception:
+#         active_connections.remove((user_id, websocket))
+
+# async def handle_message(message: str, sender_id: str):
+#     # Parse message data
+#     data = json.loads(message)
+#     if data['type'] == 'message':
+#         receiver = data['receiver']
+#         # Store message in conversation history
+#         if receiver in conversation_history:
+#             conversation_history[receiver].append({
+#                 'sender': sender_id,
+#                 'content': data['content']
+#             })
+#         else:
+#             conversation_history[receiver] = [{
+#                 'sender': sender_id,
+#                 'content': data['content']
+#             }]
+#         # Send message to the receiver if online
+#         for user_id, connection in active_connections:
+#             if user_id == receiver:
+#                 await connection.send_text(data['content'])
+#     elif data['type'] == 'history':
+#         receiver = data['user']
+#         # Send conversation history to the sender
+#         if receiver in conversation_history:
+#             history = conversation_history[receiver]
+#             for message in history:
+#                 await sender_websocket.send_text(message['content'])
+
+# # @app.get("/users", response_model=List[str])
+# # async def get_users():
+# #     return list(conversation_history.keys())
+
+
+# @app.get("/users/{user_id}", response_model=List[str])
+# async def get_user_interactions(user_id: str):
+#     interacting_users = set()
+#     for receiver, messages in conversation_history.items():
+#         for message in messages:
+#             if message['sender'] == user_id:
+#                 interacting_users.add(receiver)
+#             elif receiver == user_id:
+#                 interacting_users.add(message['sender'])
+#     return list(interacting_users)
+
+
 active_connections = []
-# Store conversation history
 conversation_history = {}
 
-# WebSocket endpoint
 @app.websocket("/chat/{user_id}")
 async def chat(websocket: WebSocket, user_id: str):
     await websocket.accept()
@@ -196,16 +258,14 @@ async def chat(websocket: WebSocket, user_id: str):
     try:
         while True:
             message = await websocket.receive_text()
-            await handle_message(message, user_id)
+            await handle_message(message, user_id, websocket)
     except Exception:
         active_connections.remove((user_id, websocket))
 
-async def handle_message(message: str, sender_id: str):
-    # Parse message data
+async def handle_message(message: str, sender_id: str, websocket: WebSocket):
     data = json.loads(message)
     if data['type'] == 'message':
         receiver = data['receiver']
-        # Store message in conversation history
         if receiver in conversation_history:
             conversation_history[receiver].append({
                 'sender': sender_id,
@@ -216,18 +276,23 @@ async def handle_message(message: str, sender_id: str):
                 'sender': sender_id,
                 'content': data['content']
             }]
-        # Send message to the receiver if online
         for user_id, connection in active_connections:
             if user_id == receiver:
-                await connection.send_text(data['content'])
+                await connection[1].send_text(data['content'])
     elif data['type'] == 'history':
         receiver = data['user']
-        # Send conversation history to the sender
         if receiver in conversation_history:
             history = conversation_history[receiver]
             for message in history:
-                await sender_websocket.send_text(message['content'])
+                await websocket.send_text(message['content'])
 
-@app.get("/users", response_model=List[str])
-async def get_users():
-    return list(conversation_history.keys())
+@app.get("/users/{user_id}", response_model=List[str])
+async def get_user_interactions(user_id: str):
+    interacting_users = set()
+    for receiver, messages in conversation_history.items():
+        for message in messages:
+            if message['sender'] == user_id:
+                interacting_users.add(receiver)
+            elif receiver == user_id:
+                interacting_users.add(message['sender'])
+    return list(interacting_users)

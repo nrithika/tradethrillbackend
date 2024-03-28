@@ -54,25 +54,50 @@ async def handle_register(data:model.User_For_Registration):
         raise HTTPException(status_code=400, detail="Passwords do not match")
     # email = f"{data.user_id}@iitk.ac.in"
     otp = random.randrange(100000, 999999, 1)
-    try:
-        send_otp_email(data.email, otp)
-    except Exception as e:
-        #error in sending otp
-        raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
+    # try:
+    #     send_otp_email(data.email, otp)
+    # except Exception as e:
+    #     #error in sending otp
+    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     
     try:
         check_query = f"SELECT * FROM users WHERE user_id = '{data.user_id}'"
         cursor.execute(check_query)
-        result = cursor.fetchall()
+        result = cursor.fetchone()
+        # if result:  # User already exists
+        #     raise HTTPException(status_code=400, detail="User already registered")
         if result == []:
+            try:
+                send_otp_email(data.email, otp)
+            except Exception as e:
+                #error in sending otp
+                raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
             query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', NULL, '{otp}', FALSE)"""
             cursor.execute(query)
             conn.commit()
-            return data
-    except Exception as e:
-        #Error in registering user
-        conn.rollback()  # Rollback any pending changes
-        raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
+        else:
+            verified_query = f"""SELECT verified FROM users WHERE user_id = '{data.user_id}'"""
+            cursor.execute(verified_query)
+            results = cursor.fetchall()
+            verified = results[0][0]
+            if not verified:
+                try:
+                    send_otp_email(data.email, otp)
+                except Exception as e:
+                    #error in sending otp
+                    raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
+                update_query = f"""update users set otp = {otp} where user_id = '{data.user_id}'"""
+                cursor.execute(update_query)
+                conn.commit()
+            else:
+                print("You've already registered")
+                if result:  # User already exists
+                    raise HTTPException(status_code=400, detail="User already registered")
+    
+    # except Exception as e:
+    #     #Error in registering user
+    #     conn.rollback()  # Rollback any pending changes
+    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     finally:
         conn.close()
     
@@ -158,7 +183,8 @@ async def forgot_password(data:model.ForgotPassword):
         email = email[0]
         otp = random.randrange(100000, 999999, 1)
         otp_email_forgotpass(email, otp)
-
+        delete_query = f"""delete from change_password where user_id = '{data.user_id}'"""
+        cursor.execute(delete_query)
         query = f"""insert into change_password values('{data.user_id}', '{data.new_password}', '{otp}')"""
         cursor.execute(query)
         conn.commit()
@@ -227,10 +253,14 @@ select user_id, email, name, photo, verified from users where user_id = '{user_i
     }
     return data
 
-async def notify_request(data:model.Notifications):
+async def notify_request(data:model.Notification):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.buyer_id}', '{data.seller_id}', '{time}', 0, {data.pid})"""
+    seller_id_query = f"""select seller_id from products where product_id = '{data.pid}'"""
+    cursor.execute(seller_id_query)
+    result = cursor.fetchone()
+    seller_id = result[0]
+    query = f"""INSERT INTO notifications VALUES ('{data.buyer_id}', '{seller_id}', '{time}', 0, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -238,26 +268,45 @@ async def notify_request(data:model.Notifications):
 async def notify_accept(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 1, {data.pid})"""
+    query = f"""INSERT INTO notifications VALUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 1, {data.pid})"""
     cursor.execute(query)
-    query = f"""
+    sold_query = f"""insert into notifications values ('{data.buyer_id}', '{data.seller_id}', '{time}', 3, {data.pid})"""
+    cursor.execute(sold_query)
+    update_query = f"""
 update products set status = TRUE where product_id = {data.pid}
 """
-    cursor.execute(query)
-    transactions({
-        "product_id": data.pid,
-        "seller_id":data.seller_id,
-        "buyer_id":data.buyer_id
-    })
+    cursor.execute(update_query)
+    delete_query = f"""delete from notifications where from_user = {data.buyer_id} and to_user = {data.seller_id} and type = 0 and pid = {data.pid}"""
+    cursor.execute(delete_query)
+
+    find_other = f"""select from_user from notifications where to_user = {data.seller_id} and pid = {data.pid} and type = 0"""
+    cursor.execute(find_other)
+    results = cursor.fetchall()
+
+
+    for result in results:
+        buyer_id = result[0]
+        insert_query = f"""insert into notifications values('{data.seller_id}', '{buyer_id}', '{time}', 2, '{data.pid}')"""
+        cursor.execute(insert_query)
+    
+    delete_other = f"""delete from notifications where to_user = {data.seller_id} and pid = {data.pid} and type = 0"""
+    cursor.execute(delete_other)
+
     conn.commit()
     conn.close()
+
+    transactions_data = model.Transactions(product_id=data.pid, seller_id=data.seller_id, buyer_id=data.buyer_id)
+    result = await transactions(transactions_data)
+
+
+    return result
 
 async def notify_reject(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""delete from notifications where from from_user={data.seller_id} and to_user = {data.buyer_id} and type = 0"""
-    cursor.execute(query)
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 2, {data.pid})"""
+    delete_query = f"""delete from notifications where from_user={data.buyer_id} and to_user = {data.seller_id} and type = 0 and pid = {data.pid}"""
+    cursor.execute(delete_query)
+    query = f"""INSERT INTO notifications VALUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 2, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -265,7 +314,7 @@ async def notify_reject(data:model.Notifications):
 async def notify_message(data:model.Notifications):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VAlUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 3, {data.pid})"""
+    query = f"""INSERT INTO notifications VALUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 4, {data.pid})"""
     cursor.execute(query)
     conn.commit()
     conn.close()
@@ -277,14 +326,28 @@ async def get_notifications(user_id: int):
     type = enum{REQUEST TO BUY, ACCEPTED TO SELL, REJECTED TO SELL, SOME MESSAGED YOU}
     It returns an array of objects of tuple of the order (<from_user_name>, <type_of_notification>, <time>)
     0 request to buy
-    1 accepted to sell
+    1 accepted to sell.. other person will get so and so seller sold the product to you
     2 rejected to sell
-    3 someone messaged
+    3 sold the product.. you will get so and so buyer bought the product
+    4 someone messaged
     """
     query = f"""
-select from_name, from_id, type, time, pid from (select u.name as from_name, n.from_user as from_id, n.time as time, n.pid as pid, n.type as type, 
-    n.to_user as to_user  from notifications as n inner join users as u on u.user_id =n.from_user ) where to_user = {user_id}
+select from_name, from_id, type, time, pid, product_title from 
+(select u.name as from_name, n.from_user as from_id, n.time as time, n.pid as pid, n.type as type, 
+    n.to_user as to_user, p.title as product_title 
+    from notifications as n 
+    inner join users as u on u.user_id = n.from_user
+    inner join products as p on p.product_id = n.pid ) 
+where to_user = {user_id}
 """
+    # query = f"""
+    # SELECT u.name AS from_name, n.from_user AS from_id, n.time AS time, n.pid AS pid, n.type AS type,
+    #        n.to_user AS to_user, p.title AS product_title
+    # FROM notifications AS n
+    # INNER JOIN users AS u ON u.user_id = n.from_user
+    # INNER JOIN products AS p ON p.product_id = n.pid
+    # WHERE to_user = {user_id}
+    # """
     conn, cursor = database.make_db()
     cursor.execute(query)
     results = cursor.fetchall()
@@ -296,50 +359,13 @@ select from_name, from_id, type, time, pid from (select u.name as from_name, n.f
             "from_id": result[1],            
             "type":result[2],
             "time":result[3],
-            "pid": result[4]
+            "pid": result[4],
+            "product_title": result[5]
         }
         
         fulldata.append(data)
     # print(fulldata)
     return fulldata
-
-# async def get_notifications(user_id: int):
-    """
-    notifications will have time, from_user, to_user, type, and product_title
-    type = enum{REQUEST TO BUY, ACCEPTED TO SELL, REJECTED TO SELL, SOME MESSAGED YOU}
-    It returns an array of objects of tuple of the order (<from_user_name>, <type_of_notification>, <time>, <product_title>)
-    0 request to buy
-    1 accepted to sell
-    2 rejected to sell
-    3 someone messaged
-    """
-    query = f"""
-    SELECT u.name AS from_name, n.from_user AS from_id, n.time AS time, n.pid AS pid, n.type AS type,
-           n.to_user AS to_user, p.title AS product_title
-    FROM notifications AS n
-    INNER JOIN users AS u ON u.user_id = n.from_user
-    INNER JOIN products AS p ON p.product_id = n.pid
-    WHERE to_user = {user_id}
-    """
-    conn, cursor = database.make_db()
-    cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
-    
-    fulldata = []
-    for result in results:
-        data = {
-            "from_name": result[0],
-            "from_id": result[1],
-            "type": result[2],
-            "time": result[3],
-            "pid": result[4],
-            "product_title": result[5]
-        }
-        fulldata.append(data)
-    
-    return fulldata
-
 
 async def login(data:model.User):
     conn, cursor = database.make_db()
@@ -373,7 +399,6 @@ async def login(data:model.User):
 
     # return False
 
-
 async def products(file: UploadFile = File(...), data: str = Form(...)):
     conn, cursor = database.make_db()
     cursor.execute("SELECT MAX(product_id) FROM products")
@@ -394,7 +419,7 @@ async def products(file: UploadFile = File(...), data: str = Form(...)):
     with open(path, "wb") as f:
         f.write(await file.read())
     print("Reached here")
-    query = f"""insert into products values ('{product_id}', '{got['seller_id']}', '{got['sell_price']}', '{got['cost_price']}', '{got['title']}', 0, '{got['usage']}', '{got['description']}', '{got['tags']}')"""
+    query = f"""insert into products values ('{product_id}', '{got['seller_id']}', '{got['sell_price']}', '{got['cost_price']}', '{got['title']}', 0, '{got['usage']}', '{got['description']}', '{got['tags']}', FALSE)"""
     cursor.execute(query)
     conn.commit()
     # print(image_data)
@@ -419,15 +444,18 @@ async def update_interests(product_id):
 
 async def wishlist(data:model.Wishlist):
     conn, cursor = database.make_db()
+    print(data)
     try:
         product_existing = f"SELECT * FROM wishlist WHERE product_id = '{data.product_id}' AND buyer_id = '{data.buyer_id}'"
         cursor.execute(product_existing)
-        existing_result = cursor.fetchone()
+        existing_result = cursor.fetchall()
 
         if existing_result:
-            raise HTTPException(status_code=400, detail="Product already exists in the wishlist")
+            print("Product already exists")
+            return None
         
         else:
+            print(existing_result)
             query = f"SELECT seller_id FROM products WHERE product_id = '{data.product_id}'"
             cursor.execute(query)
             result = cursor.fetchone()
@@ -435,7 +463,8 @@ async def wishlist(data:model.Wishlist):
             if result:
                 seller_id = result[0]
                 if seller_id == data.buyer_id:
-                    raise HTTPException(status_code=400, detail="You cannot add your own product to your wishlist")
+                    print("You cannot add your own product to your wishlist")
+                    return None
                 else:
                     insert_query = f"insert into wishlist values('{data.product_id}', '{seller_id}', '{data.buyer_id}')"
                     cursor.execute(insert_query)
@@ -449,8 +478,9 @@ async def wishlist(data:model.Wishlist):
                 raise HTTPException(status_code=404, detail="Product not found")
     
     except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail= "Internal server error. Please try again later")
+        # conn.rollback()
+        print("Jere is the error")
+        # raise HTTPException(status_code=500, detail= "Internal server error. Please try again later")
     finally:
         conn.close()
 
@@ -484,7 +514,6 @@ async def transactions(data:model.Transactions):
         query = f"SELECT sell_price, title, description FROM products WHERE product_id = '{data.product_id}'"
         cursor.execute(query)
         product_data = cursor.fetchone()
-
         if product_data:
             sell_price, title, description = product_data
             insert_query = f"INSERT INTO transactions (product_id, seller_id, buyer_id, cost, title, description) VALUES (%s, %s, %s, %s, %s, %s)"
@@ -600,15 +629,12 @@ WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
             if data in return_value:
                 continue
             return_value.append(data)
+            os.remove(image_file)
     conn.close()
-    os.remove(image_file)
 
-    print(return_value)
+    # print(return_value)
     return return_value
 
-
-# clash of variable names
-# I renamed result to image_result in 2lines
 async def edit_profile(data: model.EditProfile):
     conn, cursor = database.make_db()
     user_id = data.user_id
@@ -640,16 +666,21 @@ async def report_user(data: model.Report):
     result = cursor.fetchone()
     if result:
         reported_id = result[0]
-    cursor.execute("SELECT COUNT(*) FROM reports WHERE reporter_id = %s AND reported_id = %s",
-                   (data.reporter_id, reported_id))
-    if cursor.fetchone()[0] > 0:
-        raise HTTPException(status_code=400, detail="User has already been reported by this reporter")
+    if data.reporter_id == reported_id:
+        # raise HTTPException(status_code=400, detail="Reporter and reported user cannot be the same")
+        print("You can't report yourself")
+    else:
+        cursor.execute("SELECT COUNT(*) FROM reports WHERE reporter_id = %s AND reported_id = %s",
+                    (data.reporter_id, reported_id))
+        if cursor.fetchone()[0] > 0:
+            # raise HTTPException(status_code=400, detail="User has already been reported by this reporter")
+            print("User has already been reported")
+        else:
+            cursor.execute("INSERT INTO reports (reporter_id, reported_id) VALUES (%s, %s)",
+                        (data.reporter_id, reported_id))
+            conn.commit()
 
-    cursor.execute("INSERT INTO reports (reporter_id, reported_id) VALUES (%s, %s)",
-                   (data.reporter_id, reported_id))
-    conn.commit()
-
-    return {"message": "User reported successfully"}
+            return {"message": "User reported successfully"}
 
 async def view_profile(user_id: int):
     conn, cursor = database.make_db()
@@ -680,6 +711,8 @@ async def get_products():
         users u ON p.seller_id = u.user_id
     LEFT JOIN 
         product_images i ON p.product_id = i.product_id
+    WHERE
+        p.status = FALSE
     """
     
     cursor.execute(query)
@@ -704,8 +737,8 @@ async def get_products():
                 with open(image_file, "wb") as file:
                     file.write(image)
                 with open(image_file, "rb") as f:
-                  img_data = f.read()
-                  base64_image_data = base64.b64encode(img_data).decode()
+                    img_data = f.read()
+                    base64_image_data = base64.b64encode(img_data).decode()
             else:
                 base64_img = None
             product = {
@@ -718,36 +751,80 @@ async def get_products():
                 "product_image": base64_image_data
             }
             products.append(product)
+            os.remove(image_file)
         conn.close()
-        os.remove(image_file)
+        # print(products)
         return products
     else:
         return []
 
 async def get_specific_product(product_id: int):
     conn, cursor = database.make_db()
-    query = f"""SELECT p.seller_id, u.name as seller_name, u.email as seller_email,
-    p.sell_price, p.cost_price, p.title, p.usage, p.description
-    FROM products p 
-    INNER JOIN users u ON p.seller_id = u.user_id
-    WHERE product_id = {product_id} """
+    # query = f"""SELECT p.seller_id, u.name as seller_name, u.email as seller_email,
+    # p.sell_price, p.cost_price, p.title, p.usage, p.description, i.image
+    # FROM products p 
+    # INNER JOIN users u ON p.seller_id = u.user_id
+    # LEFT JOIN product_images i ON p.product_id = i.product_id
+    # WHERE product_id = {product_id} """
+    query = f"""
+    SELECT 
+        p.seller_id,
+        p.sell_price,
+        p.cost_price,
+        p.title,
+        p.usage,
+        p.description,
+        u.name AS seller_name,
+        u.email AS seller_email,
+        i.image AS product_image
+    FROM 
+        products p
+    JOIN 
+        users u ON p.seller_id = u.user_id
+    LEFT JOIN 
+        product_images i ON p.product_id = i.product_id
+    WHERE
+        p.product_id = {product_id}
+    """
     cursor.execute(query)
     result = cursor.fetchone()
+    image_query = f"SELECT image FROM product_images WHERE product_id = '{product_id}'"
+    cursor.execute(image_query)
+    image_result = cursor.fetchone()
+    if image_result:
+        image = image_result[0]
+    else:
+        image = None
+    if image:
+        image_file = f"{os.getcwd()}/stuff/file_buffer/{product_id}.png"
+        # with open(image_file, "rb") as img_file:
+        #     img_data = img_file.read()
+        #     # Encode the image data as base64
+        #     base64_img = base64.b64encode(img_data).decode()
+        with open(image_file, "wb") as file:
+            file.write(image)
+        with open(image_file, "rb") as f:
+            img_data = f.read()
+            base64_image_data = base64.b64encode(img_data).decode()
+    else:
+        base64_img = None
     data = {
         "seller_id":result[0],
-        "seller_name":result[1],
-        "seller_email":result[2],
-        "sell_price":result[3],
-        "cost_price":result[4],
-        "title":result[5],
-        "usage":result[6],
-        "description":result[7]
+        "sell_price":result[1],
+        "cost_price":result[2],
+        "title":result[3],
+        "usage":result[4],
+        "description":result[5],
+        "seller_name":result[6],
+        "seller_email":result[7],
+        "product_image": base64_image_data
     }
+    os.remove(image_file)
     return data
 
 async def products_on_sale(user_id: int):
     conn, cursor = database.make_db()
-    query = f"""SELECT product_id, sell_price, cost_price, title, nf_interests, usage, description, tags FROM products WHERE seller_id = {user_id}"""
+    query = f"""SELECT product_id, sell_price, cost_price, title, nf_interests, usage, description, tags FROM products WHERE seller_id = {user_id} and status = FALSE"""
     cursor.execute(query)
     results = cursor.fetchall()
     conn.close()

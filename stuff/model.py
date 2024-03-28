@@ -63,10 +63,13 @@ class Report(BaseModel):
     reporter_id: int
     # reported_id: int
 
-class Notifications(BaseModel):
+class Notification(BaseModel):
     pid: int
-    seller_id: int
+    # seller_id: int
     buyer_id: int
+
+class Notifications(Notification):
+    seller_id: int
 
 
 
