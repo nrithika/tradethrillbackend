@@ -99,8 +99,13 @@ async def products(file: UploadFile = File(...), data: str = Form(...)):
 #     return {"message": "File uploaded successfully and processed."}
 
 @app.post("/wishlist")
-async def wishlist(data:model.Wishlist):
-    a = await handle.wishlist(data)
+async def add_wishlist(data:model.Wishlist):
+    a = await handle.add_wishlist(data)
+    return a
+
+@app.post("/remove_wishlist")
+async def remove_wishlist(data:model.Wishlist):
+    a = await handle.remove_wishlist(data)
     return a
 
 @app.get("/get_wishlist/{user_id}")
@@ -128,6 +133,11 @@ async def search(data:model.Search):
 async def edit_profile(file: UploadFile = File(...), data: str = Form(...)):
     await handle.edit_profile(file, data)
     return {"message": "File uploaded successfully and processed."}
+
+@app.post("/edit_name")
+async def edit_name(data: model.EditProfile):
+    await handle.edit_name(data)
+    return True
 
 @app.post("/report")
 async def report(data:model.Report):

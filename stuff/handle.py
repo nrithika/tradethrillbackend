@@ -243,7 +243,7 @@ async def get_user_info(user_id: int):
 # select user_id, email, name, photo, verified from users where user_id = '{user_id}'
 # """
     query = f"""
-    SELECT u.user_id, u.email, u.name, ui.pic as photo, u.verified 
+    SELECT u.user_id, u.email, u.name, ui.pic as photo, u.verified, u.hashed_password
     FROM users u 
     JOIN user_images ui ON u.user_id = ui.user_id
     WHERE u.user_id = '{user_id}'
@@ -278,7 +278,8 @@ async def get_user_info(user_id: int):
             "email": result[1],
             "name": result[2],
             "photo": base64_image_data,
-            "verified": result[4]
+            "verified": result[4],
+            "hashed_password": result[5]
         }
     if image:
         os.remove(image_file)
@@ -474,7 +475,7 @@ async def update_interests(product_id):
     conn.commit()
     conn.close()
 
-async def wishlist(data:model.Wishlist):
+async def add_wishlist(data:model.Wishlist):
     conn, cursor = database.make_db()
     print(data)
     try:
@@ -515,6 +516,13 @@ async def wishlist(data:model.Wishlist):
         # raise HTTPException(status_code=500, detail= "Internal server error. Please try again later")
     finally:
         conn.close()
+
+async def remove_wishlist(data: model.Wishlist):
+    conn, cursor = database.make_db()
+    query = f"""delete from wishlist where buyer_id = {data.buyer_id} and product_id = {data.product_id}"""
+    cursor.execute(query)
+    conn.commit()
+    conn.close()
 
 async def get_wishlist(user_id: int):
     conn, cursor = database.make_db()
@@ -564,7 +572,13 @@ async def transactions(data:model.Transactions):
   
 async def get_transactions(user_id: int):
     conn, cursor = database.make_db()
-    sold_query = f"""SELECT buyer_id, cost, title, description FROM transactions WHERE seller_id = {user_id}"""
+    # sold_query = f"""SELECT buyer_id, cost, title, description FROM transactions WHERE seller_id = {user_id}"""
+    sold_query = f"""
+    SELECT t.buyer_id, t.cost, t.title, t.description, u.name
+    FROM transactions AS t
+    JOIN users AS u ON t.buyer_id = u.user_id
+    WHERE t.seller_id = {user_id}
+    """
     cursor.execute(sold_query)
     sold_results = cursor.fetchall()
     return_value = {
@@ -576,10 +590,17 @@ async def get_transactions(user_id: int):
             "buyer_id": result[0],
             "cost": result[1],
             "title": result[2],
-            "description": result[3]
+            "description": result[3],
+            "name": result[4]
         }
         return_value["sold_results"].append(data)
-    bought_query = f"""SELECT seller_id, cost, title, description FROM transactions WHERE buyer_id = {user_id}"""
+    # bought_query = f"""SELECT seller_id, cost, title, description FROM transactions WHERE buyer_id = {user_id}"""
+    bought_query = f"""
+    SELECT t.seller_id, t.cost, t.title, t.description, u.name
+    FROM transactions AS t
+    JOIN users AS u ON t.seller_id = u.user_id
+    WHERE t.buyer_id = {user_id}
+    """
     cursor.execute(bought_query)
     bought_results = cursor.fetchall()
     for result in bought_results:
@@ -587,7 +608,8 @@ async def get_transactions(user_id: int):
             "seller_id": result[0],
             "cost": result[1],
             "title": result[2],
-            "description": result[3]
+            "description": result[3],
+            "name": result[4]
         }
         return_value["bought_results"].append(data)
     return return_value
@@ -698,17 +720,25 @@ async def edit_profile(file: UploadFile = File(...), data: str = Form(...)):
     print(path)
     with open(path, "wb") as f:
         f.write(await file.read())
-    update_query = f"""update users set name = '{got['name']}' where user_id = {got['user_id']}"""
+    update_query = f"""update users set name = '{got['name']}' where user_id = {got['user_id']}"""    
     cursor.execute(update_query)
     conn.commit()
+
     upload_query = f"""update user_images set pic = pg_read_binary_file('{path}')::bytea where user_id = {got['user_id']}"""
     cursor.execute(upload_query)
     conn.commit()
     conn.close()
     os.remove(path)
     print("file removed")
+    
     return None
 
+async def edit_name(data: model.EditProfile):
+    conn, cursor = database.make_db()
+    update_query = f"""update users set name = '{data.name}' where user_id = {data.user_id}"""
+    cursor.execute(update_query)
+    conn.commit()
+    conn.close()
 
 async def report_user(data: model.Report):
     conn, cursor = database.make_db()

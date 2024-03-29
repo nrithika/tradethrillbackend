@@ -24,7 +24,7 @@ class ForgotPassword(BaseModel):
 class EditProfile(BaseModel):
     user_id:int
     name: str
-    photo:str
+    # photo:str
 
 # class Product(BaseModel):
 #     seller_id:int
