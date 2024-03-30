@@ -9,7 +9,7 @@ class User(BaseModel):
 class User_For_Registration(User):
     name:str
     email:str
-    confirm_password:str
+    # confirm_password:str
 
 class OTP(BaseModel):
     user_id:int
@@ -18,7 +18,7 @@ class OTP(BaseModel):
 class ForgotPassword(BaseModel):
     user_id:int
     new_password:str
-    confirm_password:str
+    # confirm_password:str
     # otp:int
 
 class EditProfile(BaseModel):

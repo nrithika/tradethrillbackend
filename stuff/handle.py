@@ -8,6 +8,8 @@ from datetime import datetime
 from PIL import Image
 from io import BytesIO
 
+import bcrypt
+
 import base64
 
 import json
@@ -50,8 +52,8 @@ async def handle_register(data:model.User_For_Registration):
     if num_reports >= 7:
         raise HTTPException(status_code=403, detail="User access restricted due to reports")
     
-    if data.hashed_password != data.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
+    # if data.hashed_password != data.confirm_password:
+        # raise HTTPException(status_code=400, detail="Passwords do not match")
     # email = f"{data.user_id}@iitk.ac.in"
     otp = random.randrange(100000, 999999, 1)
     # try:
@@ -66,7 +68,7 @@ async def handle_register(data:model.User_For_Registration):
         result = cursor.fetchone()
         # if result:  # User already exists
         #     raise HTTPException(status_code=400, detail="User already registered")
-        if result == []:
+        if result is None:
             try:
                 send_otp_email(data.email, otp)
             except Exception as e:
@@ -166,8 +168,8 @@ async def forgot_password(data:model.ForgotPassword):
     if num_reports >= 7:
         raise HTTPException(status_code=403, detail="User access restricted due to reports")
     
-    if data.new_password != data.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
+    # if data.new_password != data.confirm_password:
+        # raise HTTPException(status_code=400, detail="Passwords do not match")
     
     try:
         verify_user_query = f"SELECT verified FROM users WHERE user_id = '{data.user_id}'"
@@ -412,7 +414,8 @@ async def login(data:model.User):
     result = cursor.fetchone()
     if result:
         hashed_password, verified = result
-        if verified and hashed_password == data.hashed_password:
+        # if verified and hashed_password == data.hashed_password:
+        if verified and bcrypt.checkpw(data.hashed_password.encode('utf-8'), hashed_password.encode('utf-8')):
             conn.close()
             # add code for sending the user data, notifications
             empty_data = {}
