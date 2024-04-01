@@ -175,11 +175,11 @@ async def forgot_password(data:model.ForgotPassword):
         cursor.execute(query)
         conn.commit()
         return data
-    except Exception as e:
-        #error in reseting password
-        conn.rollback()  # Rollback any pending changes
-        print(e)
-        raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
+    # except Exception as e:
+    #     #error in reseting password
+    #     conn.rollback()  # Rollback any pending changes
+    #     print(e)
+    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     finally:
         conn.close()
 
@@ -328,13 +328,13 @@ async def notify_reject(data:model.Notifications):
     conn.commit()
     conn.close()
 
-async def notify_message(data:model.Notifications):
-    conn, cursor = database.make_db()
-    time = datetime.today().strftime('%Y-%m-%d')
-    query = f"""INSERT INTO notifications VALUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 4, {data.pid})"""
-    cursor.execute(query)
-    conn.commit()
-    conn.close()
+# async def notify_message(data:model.Notifications):
+#     conn, cursor = database.make_db()
+#     time = datetime.today().strftime('%Y-%m-%d')
+#     query = f"""INSERT INTO notifications VALUES ('{data.seller_id}', '{data.buyer_id}', '{time}', 4, {data.pid})"""
+#     cursor.execute(query)
+#     conn.commit()
+#     conn.close()
 
 async def get_notifications(user_id: int):
     # this function is to get the notifications from the user live and assist the login function
@@ -346,7 +346,6 @@ async def get_notifications(user_id: int):
     1 accepted to sell.. other person will get so and so seller sold the product to you
     2 rejected to sell
     3 sold the product.. you will get so and so buyer bought the product
-    4 someone messaged
     """
     query = f"""
 select from_name, from_id, type, time, pid, product_title from 
@@ -409,6 +408,7 @@ async def login(user_id: int):
         else:
             conn.close()
             print("User is not verified")
+            raise HTTPException(status_code=403, detail="User is not verified")
             return False
         
     else:
@@ -470,6 +470,7 @@ async def add_wishlist(data:model.Wishlist):
 
         if existing_result:
             print("Product already exists")
+            raise HTTPException(status_code=400, detail="Product already exists")
             return None
         
         else:
@@ -482,6 +483,7 @@ async def add_wishlist(data:model.Wishlist):
                 seller_id = result[0]
                 if seller_id == data.buyer_id:
                     print("You cannot add your own product to your wishlist")
+                    raise HTTPException(status_code=400, detail="You cannot add your own product to your wishlist")
                     return None
                 else:
                     insert_query = f"insert into wishlist values('{data.product_id}', '{seller_id}', '{data.buyer_id}')"
@@ -495,9 +497,9 @@ async def add_wishlist(data:model.Wishlist):
             else:
                 raise HTTPException(status_code=404, detail="Product not found")
     
-    except Exception as e:
-        # conn.rollback()
-        print("Jere is the error")
+    # except Exception as e:
+    #     # conn.rollback()
+    #     print("Jere is the error")
         # raise HTTPException(status_code=500, detail= "Internal server error. Please try again later")
     finally:
         conn.close()
@@ -507,6 +509,7 @@ async def remove_wishlist(data: model.Wishlist):
     query = f"""delete from wishlist where buyer_id = {data.buyer_id} and product_id = {data.product_id}"""
     cursor.execute(query)
     conn.commit()
+    await update_interests(data.product_id)
     conn.close()
 
 async def get_wishlist(user_id: int):
@@ -515,7 +518,8 @@ async def get_wishlist(user_id: int):
                 products.title, products.usage, products.description, users.name FROM 
                 (select * from wishlist where buyer_id = {user_id}) 
                 as w inner join products on w.product_id = products.product_id
-                inner join users on products.seller_id = users.user_id"""
+                inner join users on products.seller_id = users.user_id
+                where products.status != true"""
     cursor.execute(query)
     results = cursor.fetchall()
     return_value = []
@@ -629,6 +633,7 @@ u.email as seller_email
 FROM products as p
 LEFT JOIN product_images as i on p.product_id = i.product_id
 JOIN users as u on p.seller_id = u.user_id
+WHERE p.status != true
 ) as s
 WHERE s.title ILIKE '{regex_word}' or s.description ILIKE '{regex_word}'
 """
@@ -737,8 +742,7 @@ async def edit_products(file: UploadFile = File(...), data: str = Form(...)):
                     cost_price = '{got['cost_price']}', 
                     title = '{got['title']}', 
                     usage = '{got['usage']}',
-                    description = '{got['description']}', 
-                    tags = '{got['tags']}' 
+                    description = '{got['description']}'
                     where product_id = '{got['product_id']}'"""
     cursor.execute(update_query)
     conn.commit()
@@ -759,8 +763,7 @@ async def edit_product_details(data: model.Product):
                     cost_price = '{data.cost_price}', 
                     title = '{data.title}', 
                     usage = '{data.usage}',
-                    description = '{data.description}', 
-                    tags = '{data.tags}' 
+                    description = '{data.description}'
                     where product_id = '{data.product_id}'"""
     cursor.execute(update_query)
     conn.commit()
@@ -774,14 +777,14 @@ async def report_user(data: model.Report):
     if result:
         reported_id = result[0]
     if data.reporter_id == reported_id:
-        # raise HTTPException(status_code=400, detail="Reporter and reported user cannot be the same")
         print("You can't report yourself")
+        raise HTTPException(status_code=400, detail="Reporter and reported user cannot be the same")
     else:
         cursor.execute("SELECT COUNT(*) FROM reports WHERE reporter_id = %s AND reported_id = %s",
                     (data.reporter_id, reported_id))
         if cursor.fetchone()[0] > 0:
-            # raise HTTPException(status_code=400, detail="User has already been reported by this reporter")
             print("User has already been reported")
+            raise HTTPException(status_code=400, detail="User has already been reported by this reporter")
         else:
             cursor.execute("INSERT INTO reports (reporter_id, reported_id) VALUES (%s, %s)",
                         (data.reporter_id, reported_id))
@@ -850,6 +853,12 @@ async def get_products():
         product_images i ON p.product_id = i.product_id
     WHERE
         p.status = FALSE
+        AND u.user_id NOT IN (
+            SELECT reported_id 
+            FROM reports 
+            GROUP BY reported_id 
+            HAVING COUNT(*) >= 7
+        )
     """
     
     cursor.execute(query)
@@ -984,7 +993,12 @@ async def products_on_sale(user_id: int):
     else:
         return []
 
-
+async def remove_product(product_id: int):
+    conn,cursor = database.make_db()
+    delete_query = f"""delete from products where product_id = {product_id}"""
+    cursor.execute(delete_query)
+    conn.commit()
+    conn.close()
 
 
 

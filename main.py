@@ -76,10 +76,10 @@ async def notify_reject(data:model.Notifications):
     a = await handle.notify_reject(data)
     return a
 
-@app.post("/notify_message")
-async def notify_message(data:model.Notifications):
-    a = await handle.notify_message(data)
-    return a
+# @app.post("/notify_message")
+# async def notify_message(data:model.Notifications):
+#     a = await handle.notify_message(data)
+#     return a
 
 @app.get("/get_notifications/{user_id}")
 async def get_notifications(user_id: int):
@@ -181,8 +181,10 @@ async def products_on_sale(user_id: int):
     a = await handle.products_on_sale(user_id)
     return a
 
-
-
+@app.delete("/remove_product/{product_id}")
+async def remove_product(product_id: int):
+    a = await handle.remove_product(product_id)
+    return a
 
 
 # just checking

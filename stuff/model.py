@@ -39,7 +39,7 @@ class Product(BaseModel):
     title:str
     usage:int
     description:str
-    tags:str
+    # tags:str
 
 # class ProductImage(BaseModel):
 #     pid: int
