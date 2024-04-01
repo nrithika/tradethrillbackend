@@ -2,14 +2,20 @@ from pydantic import BaseModel
 from fastapi import UploadFile
 from typing import Optional,Union
 
-class User(BaseModel):
-    user_id:int
-    hashed_password:str
+# class User(BaseModel):
+#     user_id:int
+#     hashed_password:str
 
-class User_For_Registration(User):
+# class User_For_Registration(User):
+#     name:str
+#     email:str
+    # confirm_password:str
+
+class User_For_Registration(BaseModel):
+    user_id:int
     name:str
     email:str
-    # confirm_password:str
+    hashed_password:str
 
 class OTP(BaseModel):
     user_id:int

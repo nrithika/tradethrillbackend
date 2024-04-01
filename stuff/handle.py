@@ -384,23 +384,24 @@ where to_user = {user_id}
     # print(fulldata)
     return fulldata
 
-async def login(data:model.User):
+async def login(user_id: int):
     conn, cursor = database.make_db()
-    cursor.execute("SELECT COUNT(*) FROM reports WHERE reported_id = %s", (data.user_id,))
+    report_query = f"""SELECT COUNT(*) FROM reports WHERE reported_id = {user_id}"""
+    cursor.execute(report_query)
     num_reports = cursor.fetchone()[0]
     if num_reports >= 7:
         raise HTTPException(status_code=403, detail="User access restricted due to reports")
     
-    query = f"SELECT hashed_password, verified FROM users WHERE user_id='{data.user_id}'"
+    query = f"SELECT verified FROM users WHERE user_id='{user_id}'"
     cursor.execute(query)
     result = cursor.fetchone()
     if result:
-        hashed_password, verified = result
+        verified = result[0]
         if verified:
             # add code for sending the user data, notifications
             empty_data = {}
-            user_info = await get_user_info(data.user_id)
-            user_notifications = await get_notifications(data.user_id)
+            user_info = await get_user_info(user_id)
+            user_notifications = await get_notifications(user_id)
             # data = { **empty_data, **user_info, "notifications": user_notifications,  "message":"success"}
             data = { **empty_data, **user_info, "notifications": user_notifications,  "message":"success"}
             # print (data)
@@ -452,7 +453,7 @@ async def products(file: UploadFile = File(...), data: str = Form(...)):
         "pid": product_id 
     }
 
-async def update_interests(product_id):
+async def update_interests(product_id: int):
     conn, cursor = database.make_db()
     query = f"""UPDATE products SET nf_interests = (SELECT COUNT(*) FROM wishlist WHERE wishlist.product_id = '{product_id}') WHERE product_id = '{product_id}'"""
     cursor.execute(query)
