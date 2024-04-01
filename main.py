@@ -52,6 +52,7 @@ async def new_otp(data:model.OTP):
 @app.post("/login")
 async def login(data:model.User):
     # print("hello")
+    print(data)
     a = await handle.login(data)
     return a
 
@@ -137,6 +138,16 @@ async def edit_profile(file: UploadFile = File(...), data: str = Form(...)):
 @app.post("/edit_name")
 async def edit_name(data: model.EditProfile):
     await handle.edit_name(data)
+    return True
+
+@app.post("/edit_products")
+async def edit_products(file: UploadFile = File(...), data: str = Form(...)):
+    await handle.edit_products(file, data)
+    return {"message": "File uploaded successsfully and processed."}
+
+@app.post("/edit_product_details")
+async def edit_product_details(data: model.Product):
+    await handle.edit_product_details(data)
     return True
 
 @app.post("/report")

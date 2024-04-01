@@ -45,34 +45,20 @@ def send_otp_email(receiver_email, otp):
     server.quit()
 
 async def handle_register(data:model.User_For_Registration):
-    # print(data)
     conn,cursor=database.make_db()
     cursor.execute("SELECT COUNT(*) FROM reports WHERE reported_id = %s", (data.user_id,))
     num_reports = cursor.fetchone()[0]
     if num_reports >= 7:
         raise HTTPException(status_code=403, detail="User access restricted due to reports")
-    
-    # if data.hashed_password != data.confirm_password:
-        # raise HTTPException(status_code=400, detail="Passwords do not match")
-    # email = f"{data.user_id}@iitk.ac.in"
     otp = random.randrange(100000, 999999, 1)
-    # try:
-    #     send_otp_email(data.email, otp)
-    # except Exception as e:
-    #     #error in sending otp
-    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
-    
     try:
         check_query = f"SELECT * FROM users WHERE user_id = '{data.user_id}'"
         cursor.execute(check_query)
         result = cursor.fetchone()
-        # if result:  # User already exists
-        #     raise HTTPException(status_code=400, detail="User already registered")
         if result is None:
             try:
                 send_otp_email(data.email, otp)
             except Exception as e:
-                #error in sending otp
                 raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
             query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', '{otp}', FALSE)"""
             cursor.execute(query)
@@ -98,10 +84,6 @@ async def handle_register(data:model.User_For_Registration):
                 if result:  # User already exists
                     raise HTTPException(status_code=400, detail="User already registered")
     
-    # except Exception as e:
-    #     #Error in registering user
-    #     conn.rollback()  # Rollback any pending changes
-    #     raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
     finally:
         conn.close()
     
@@ -414,19 +396,18 @@ async def login(data:model.User):
     result = cursor.fetchone()
     if result:
         hashed_password, verified = result
-        # if verified and hashed_password == data.hashed_password:
-        if verified and bcrypt.checkpw(data.hashed_password.encode('utf-8'), hashed_password.encode('utf-8')):
-            conn.close()
+        if verified:
             # add code for sending the user data, notifications
             empty_data = {}
             user_info = await get_user_info(data.user_id)
             user_notifications = await get_notifications(data.user_id)
+            # data = { **empty_data, **user_info, "notifications": user_notifications,  "message":"success"}
             data = { **empty_data, **user_info, "notifications": user_notifications,  "message":"success"}
             # print (data)
             return data
         else:
             conn.close()
-            raise HTTPException(status_code=401, detail="Incorrect password or unverified account")
+            print("User is not verified")
             return False
         
     else:
@@ -743,6 +724,47 @@ async def edit_name(data: model.EditProfile):
     conn.commit()
     conn.close()
 
+async def edit_products(file: UploadFile = File(...), data: str = Form(...)):
+    conn,cursor = database.make_db()
+    got = json.loads(data)
+    path = f"/tmp/{got['product_id']}.png"
+    print(path)
+    with open (path, "wb") as f:
+        f.write(await file.read())
+    update_query = f"""update products set 
+                    sell_price = '{got['sell_price']}', 
+                    cost_price = '{got['cost_price']}', 
+                    title = '{got['title']}', 
+                    usage = '{got['usage']}',
+                    description = '{got['description']}', 
+                    tags = '{got['tags']}' 
+                    where product_id = '{got['product_id']}'"""
+    cursor.execute(update_query)
+    conn.commit()
+    
+    upload_query = f"""update product_images set image = pg_read_binary_file('{path}')::bytea where product_id = {got['product_id']}"""
+    cursor.execute(upload_query)
+    conn.commit()
+    conn.close()
+    os.remove(path)
+    print("file removed")
+
+    return None
+
+async def edit_product_details(data: model.Product):
+    conn, cursor = database.make_db()
+    update_query = f"""update products set 
+                    sell_price = '{data.sell_price}',
+                    cost_price = '{data.cost_price}', 
+                    title = '{data.title}', 
+                    usage = '{data.usage}',
+                    description = '{data.description}', 
+                    tags = '{data.tags}' 
+                    where product_id = '{data.product_id}'"""
+    cursor.execute(update_query)
+    conn.commit()
+    conn.close()
+
 async def report_user(data: model.Report):
     conn, cursor = database.make_db()
     query = f"SELECT seller_id FROM products WHERE product_id = {data.product_id}"
@@ -953,8 +975,8 @@ async def products_on_sale(user_id: int):
                 "title": row[3],
                 "nf_interests": row[4],
                 "usage": row[5],
-                "description": row[6]
-                # "tags": row[7]
+                "description": row[6],
+                "tags": row[7]
             }
             products.append(product)
         return products
