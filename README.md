@@ -26,3 +26,6 @@ Open your terminal. Make sure you activate your virtual environment if you've th
 ```
    uvicorn app.main:app --reload
 ```
+
+
+* Frontend github repo : https://github.com/amruta1625/SystemCrash
