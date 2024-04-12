@@ -271,6 +271,24 @@ async def get_user_info(user_id: int):
     return data
 
 
+async def get_request_count(product_id: int, buyer_id: int):
+    print("hello")
+    conn, cursor = database.make_db()
+    query = f"""SELECT COUNT(*) FROM notifications
+                WHERE pid = {product_id} AND from_user = {buyer_id}"""
+    print("query done")
+    cursor.execute(query)
+    result = cursor.fetchone()
+    print(result[0])
+    conn.close()
+    if result:
+        print("reached")
+        return {"count": result[0]}
+
+    else:
+        print("else reached")
+        return {"count": 0}
+
 async def notify_request(data:model.Notification):
     conn, cursor = database.make_db()
     time = datetime.today().strftime('%Y-%m-%d')

@@ -186,7 +186,10 @@ async def remove_product(product_id: int):
     a = await handle.remove_product(product_id)
     return a
 
-
+@app.get("/request_count/{product_id}/{buyer_id}")
+async def get_request_count(product_id: int, buyer_id: int):
+    a = await handle.get_request_count(product_id, buyer_id)
+    return a
 # just checking
 
 
