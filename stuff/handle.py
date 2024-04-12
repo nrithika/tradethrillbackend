@@ -61,6 +61,7 @@ async def handle_register(data:model.User_For_Registration):
             except Exception as e:
                 raise HTTPException(status_code=500, detail="Internal server error. Please try again later")
             query = f"""insert into users values('{data.user_id}', '{data.email}', '{data.hashed_password}', '{data.name}', '{otp}', FALSE)"""
+            print(query)
             cursor.execute(query)
             pic_query = f"""insert into user_images values('{data.user_id}', NULL)"""
             cursor.execute(pic_query)
@@ -277,6 +278,8 @@ async def notify_request(data:model.Notification):
     cursor.execute(seller_id_query)
     result = cursor.fetchone()
     seller_id = result[0]
+    if seller_id == data.buyer_id:
+        raise HTTPException(status_code=400, detail="You cannot request your own product")
     query = f"""INSERT INTO notifications VALUES ('{data.buyer_id}', '{seller_id}', '{time}', 0, {data.pid})"""
     cursor.execute(query)
     conn.commit()
@@ -353,9 +356,10 @@ select from_name, from_id, type, time, pid, product_title from
     n.to_user as to_user, p.title as product_title 
     from notifications as n 
     inner join users as u on u.user_id = n.from_user
-    inner join products as p on p.product_id = n.pid ) 
+    inner join products as p on p.product_id = n.pid ) as sub
 where to_user = {user_id}
 """
+    print(query)
     # query = f"""
     # SELECT u.name AS from_name, n.from_user AS from_id, n.time AS time, n.pid AS pid, n.type AS type,
     #        n.to_user AS to_user, p.title AS product_title
@@ -997,6 +1001,8 @@ async def remove_product(product_id: int):
     conn,cursor = database.make_db()
     delete_query = f"""delete from products where product_id = {product_id}"""
     cursor.execute(delete_query)
+    photo_query = f"""delete from product_images where product_id = {product_id}"""
+    cursor.execute(photo_query)
     conn.commit()
     conn.close()
 
